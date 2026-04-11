@@ -119,6 +119,7 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#f4f6fb;color:#11182
     <div class="lock-err" id="lock-err"></div>
     <input class="lock-input" type="password" id="lock-pw" placeholder="••••••" onkeydown="if(event.key==='Enter')tryUnlock()">
     <button class="lock-btn" onclick="tryUnlock()">Anmelden</button>
+    <div style="font-size:11px;color:#9ca3af;margin-top:16px">Standard-Passwort: <strong>HKL2024</strong><br>Änderbar unter ⚙ Einstellungen</div>
   </div>
 </div>
 
@@ -166,47 +167,40 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#f4f6fb;color:#11182
 
 <div class="modal-bg hidden" id="modal-export">
   <div class="modal">
-    <div style="font-size:16px;font-weight:700;margin-bottom:6px">📤 Bestellung exportieren</div>
-    <div class="text-sub mb16">Wähle eine Methode:</div>
+    <div style="font-size:16px;font-weight:700;margin-bottom:4px">📤 Bestellung exportieren</div>
+    <div class="text-sub mb16">Wähle wie du die Excel-Datei weitergeben möchtest:</div>
 
-    <!-- Download -->
+    <!-- OPTION 1: Teilen (Handy-nativ) -->
+    <div class="card mb8" style="border-color:var(--greenbd);background:var(--greenl)">
+      <div style="font-size:13px;font-weight:700;color:var(--green);margin-bottom:4px">📲 Teilen — WhatsApp, E-Mail, Teams…</div>
+      <div class="text-xs mb10" style="line-height:1.6">
+        Öffnet das Teilen-Menü deines Handys. Du kannst die Excel-Datei direkt über
+        WhatsApp, deine Mail-App, Teams oder jeden anderen Dienst weiterleiten.
+        <strong>Empfohlen für Handy.</strong>
+      </div>
+      <button class="btn btn-green btn-sm" id="share-btn" onclick="teileXLSX()">📲 Datei teilen</button>
+      <span id="share-ok" style="font-size:12px;color:var(--green);margin-left:10px;display:none">✓ Geteilt!</span>
+      <div id="share-not-supported" style="display:none;margin-top:8px;font-size:12px;color:var(--orange)">
+        ⚠ Teilen wird von diesem Browser nicht unterstützt. Bitte „Herunterladen" verwenden.
+      </div>
+    </div>
+
+    <!-- OPTION 2: Download (PC) -->
     <div class="card mb8" style="border-color:#a5b4fc">
-      <div style="font-size:13px;font-weight:700;color:var(--blue);margin-bottom:4px">💾 Als Datei herunterladen</div>
-      <div class="text-xs mb8">Speichert die CSV-Datei auf dein Gerät. Danach per E-Mail weiterleiten.</div>
+      <div style="font-size:13px;font-weight:700;color:var(--blue);margin-bottom:4px">💾 Herunterladen</div>
+      <div class="text-xs mb10" style="line-height:1.6">
+        Speichert die Excel-Datei direkt auf das Gerät.
+        <strong>Empfohlen für PC</strong> — danach direkt in CGM MUSE hochladen.
+      </div>
       <button class="btn btn-blue btn-sm" onclick="downloadCSV()">⬇ Als Excel (.xlsx) herunterladen</button>
       <span id="dl-ok" style="font-size:12px;color:var(--green);margin-left:10px;display:none">✓ Gespeichert!</span>
     </div>
 
-    <!-- Email via EmailJS -->
-    <div class="card mb8" style="border-color:var(--greenbd)" id="email-card">
-      <div style="font-size:13px;font-weight:700;color:var(--green);margin-bottom:4px">📧 Direkt per E-Mail versenden</div>
-      <div class="text-xs mb8" id="email-setup-hint"></div>
-      <div id="email-form-area">
-        <div class="mb8">
-          <div class="label">Empfänger</div>
-          <input class="inp" id="email-to" type="email" placeholder="einkauf@klinik.de">
-        </div>
-        <div class="mb8">
-          <div class="label">Absender-Name</div>
-          <input class="inp" id="email-from-name" placeholder="z.B. Marcel Kubitzek, HKL">
-        </div>
-        <div class="mb12">
-          <div class="label">Nachricht (optional)</div>
-          <textarea class="inp" id="email-msg" rows="2" placeholder="z.B. Lagerbestellung KW 15"></textarea>
-        </div>
-        <button class="btn btn-green btn-sm" onclick="sendEmail()" id="email-send-btn">📧 E-Mail senden</button>
-        <span id="email-status" style="font-size:12px;margin-left:10px"></span>
-      </div>
-      <div id="email-not-configured" class="hidden">
-        <div style="font-size:12px;color:var(--orange)">⚠ EmailJS noch nicht eingerichtet. Bitte unter ⚙ Einstellungen konfigurieren.</div>
-      </div>
-    </div>
-
-    <!-- Copy -->
+    <!-- OPTION 3: Kopieren -->
     <div class="card mb16">
-      <div style="font-size:13px;font-weight:700;color:var(--mid);margin-bottom:4px">📋 In Zwischenablage kopieren</div>
-      <div class="text-xs mb8">CSV-Inhalt kopieren und manuell einfügen.</div>
-      <button class="btn btn-gray btn-sm" onclick="copyCSV()" id="copy-btn">📋 Kopieren</button>
+      <div style="font-size:13px;font-weight:700;color:var(--mid);margin-bottom:4px">📋 Inhalt kopieren</div>
+      <div class="text-xs mb10">Kopiert die Bestellliste als Text in die Zwischenablage — zum Einfügen in eine E-Mail oder Notiz.</div>
+      <button class="btn btn-gray btn-sm" onclick="copyCSV()" id="copy-btn">📋 In Zwischenablage kopieren</button>
     </div>
 
     <div class="flex" style="justify-content:flex-end">
@@ -428,7 +422,7 @@ const LS = {
   pwinfo:  'hkl_pwinfo_v4',
   ejs:     'hkl_emailjs_v4',
 };
-const APP_PW_DEFAULT = 'kath8517';
+const APP_PW_DEFAULT = 'HKL2024';
 
 function ls(key, fb) { try { const v=localStorage.getItem(key); return v?JSON.parse(v):fb; } catch { return fb; } }
 function sv(key, val) { try { localStorage.setItem(key, JSON.stringify(val)); } catch {} }
@@ -771,23 +765,57 @@ function renderExport() {
       <span>SAP-Nr.</span><span>Bezeichnung</span><span>Menge</span><span>Bereich</span>
     </div>
     <div class="tbl-body mb16">${rows}</div>
-    <button class="btn btn-blue" onclick="openExportModal()">📤 Exportieren / per E-Mail senden</button>
+    <button class="btn btn-blue" onclick="openExportModal()">📤 Exportieren / Teilen</button>
     <div class="text-xs mt8">Dateiname: Bestellung_JJJJMMTT_HHMM.xlsx · Excel-Format · CGM MUSE kompatibel</div>`;
 }
 function openExportModal() {
-  // Check EmailJS config
-  const ejs=ST.ejs;
-  const configured=ejs.serviceId&&ejs.templateId&&ejs.publicKey;
-  document.getElementById('email-not-configured').classList.toggle('hidden', configured);
-  document.getElementById('email-form-area').classList.toggle('hidden', !configured);
-  document.getElementById('email-setup-hint').textContent = configured
-    ? 'EmailJS ist konfiguriert. Du kannst die Bestellung direkt versenden.'
-    : '';
-  if(configured && ejs.emailTo) document.getElementById('email-to').value=ejs.emailTo;
-  if(configured && ejs.fromName) document.getElementById('email-from-name').value=ejs.fromName;
   document.getElementById('dl-ok').style.display='none';
-  document.getElementById('email-status').textContent='';
+  document.getElementById('share-ok').style.display='none';
+  document.getElementById('share-not-supported').style.display='none';
   showModal('modal-export');
+}
+
+
+// ── Teilen via Web Share API (Handy-nativ) ────────────────────────────────────
+async function teileXLSX() {
+  const name = `Bestellung_${ts()}.xlsx`;
+  const wb   = buildXLSX();
+  const wbout= XLSX.write(wb, {bookType:'xlsx', type:'array'});
+  const blob = new Blob([wbout], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+  const file = new File([blob], name, {type: blob.type});
+
+  // Web Share API Level 2 — unterstützt Datei-Anhänge (iOS Safari 15+, Android Chrome)
+  if (navigator.canShare && navigator.canShare({files:[file]})) {
+    try {
+      await navigator.share({
+        title: `Lagerbestellung HKL ${new Date().toLocaleDateString('de-DE')}`,
+        text:  `Lagerbestellung vom ${new Date().toLocaleDateString('de-DE')} · ${bestellListe().length} Positionen`,
+        files: [file],
+      });
+      document.getElementById('share-ok').style.display='inline';
+      setTimeout(()=>document.getElementById('share-ok').style.display='none', 4000);
+    } catch(e) {
+      if (e.name !== 'AbortError') {
+        // Teilen fehlgeschlagen → Fallback Download
+        document.getElementById('share-not-supported').style.display='block';
+      }
+    }
+  } else if (navigator.share) {
+    // Share API vorhanden aber keine Datei-Unterstützung → Text teilen
+    try {
+      const liste = bestellListe();
+      const text  = liste.map(a=>`${a.effSap} | ${a.bezeichnung} | ${a.menge}x`).join('\n');
+      await navigator.share({
+        title: `Lagerbestellung HKL ${new Date().toLocaleDateString('de-DE')}`,
+        text:  `Lagerbestellung ${new Date().toLocaleDateString('de-DE')}:\n\n${text}`,
+      });
+      document.getElementById('share-ok').style.display='inline';
+      setTimeout(()=>document.getElementById('share-ok').style.display='none', 4000);
+    } catch(e) { /* abgebrochen */ }
+  } else {
+    // Kein Share API → Hinweis anzeigen, Download anbieten
+    document.getElementById('share-not-supported').style.display='block';
+  }
 }
 
 // ── Download ──────────────────────────────────────────────────────────────────
@@ -821,60 +849,9 @@ function copyCSV() {
   });
 }
 
-// ── EmailJS Send ──────────────────────────────────────────────────────────────
-async function sendEmail() {
-  const ejs=ST.ejs;
-  if(!ejs.serviceId||!ejs.templateId||!ejs.publicKey) { alert('EmailJS nicht konfiguriert.'); return; }
-  const to=document.getElementById('email-to').value.trim();
-  const fromName=document.getElementById('email-from-name').value.trim()||'HKL Team';
-  const msg=document.getElementById('email-msg').value.trim();
-  if(!to) { alert('Bitte Empfänger-E-Mail eingeben.'); return; }
+// ── EmailJS Send (deaktiviert — Teilen-Funktion wird verwendet) ──────────────
+async function sendEmail() { alert('Bitte die Teilen-Funktion verwenden.'); }
 
-  const btn=document.getElementById('email-send-btn');
-  const status=document.getElementById('email-status');
-  btn.disabled=true; btn.textContent='Wird gesendet…'; status.textContent='';
-
-  // Build xlsx and encode as base64 for email attachment
-  const wb=buildXLSX();
-  const wbout=XLSX.write(wb,{bookType:'xlsx',type:'base64'});
-  const csvContent=buildCSVText(); // Also keep text version for email body
-  const liste=bestellListe();
-  const tabelleText=liste.map(a=>`${a.effSap} | ${a.bezeichnung} | Menge: ${a.menge}${a.ersetzt?' (ERSETZT)':''}`).join('\n');
-
-  const params = {
-    to_email:    to,
-    from_name:   fromName,
-    subject:     `Lagerbestellung HKL ${new Date().toLocaleDateString('de-DE')}`,
-    message:     msg || `Lagerbestellung vom ${new Date().toLocaleDateString('de-DE')}`,
-    bestellung:  tabelleText,
-    csv_content: csvContent,
-    xlsx_base64: wbout,
-    filename:    `Bestellung_${ts()}.xlsx`,
-    anzahl:      String(liste.length),
-    datum:       new Date().toLocaleDateString('de-DE'),
-  };
-
-  try {
-    // Load EmailJS SDK if not loaded
-    if(!window.emailjs) {
-      await new Promise((res,rej)=>{
-        const s=document.createElement('script');
-        s.src='https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js';
-        s.onload=res; s.onerror=rej; document.head.appendChild(s);
-      });
-    }
-    emailjs.init(ejs.publicKey);
-    await emailjs.send(ejs.serviceId, ejs.templateId, params);
-    status.textContent='✓ Gesendet!'; status.style.color='var(--green)';
-    btn.textContent='📧 E-Mail senden'; btn.disabled=false;
-    setTimeout(()=>{ status.textContent=''; },5000);
-  } catch(err) {
-    status.textContent='Fehler: '+(err.text||err.message||'Unbekannt');
-    status.style.color='var(--red)';
-    btn.textContent='📧 E-Mail senden'; btn.disabled=false;
-    console.error('EmailJS error:', err);
-  }
-}
 
 // ── ARTIKEL ───────────────────────────────────────────────────────────────────
 function renderArtikel() {
