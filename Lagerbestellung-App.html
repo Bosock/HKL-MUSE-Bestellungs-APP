@@ -1,0 +1,1260 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>⚕ Lager-Bestellsystem · HKL</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:#f4f6fb;color:#111827;min-height:100vh}
+:root{
+  --blue:#1a56db;--bluel:#eef2ff;--bluem:#a5b4fc;
+  --green:#166534;--greenl:#f0fdf4;--greenbd:#86efac;
+  --orange:#b45309;--orangel:#fffbeb;--orangebd:#fcd34d;
+  --red:#b91c1c;--redl:#fef2f2;--redbd:#fca5a5;
+  --border:#dde1ec;--surf:#fff;--sub:#6b7280;--faint:#9ca3af;--text:#111827;--mid:#374151
+}
+/* Lock screen */
+#lockscreen{position:fixed;inset:0;background:linear-gradient(135deg,#1e3a8a,#1a56db);display:flex;align-items:center;justify-content:center;z-index:9999;padding:20px}
+.lock-card{background:#fff;border-radius:16px;padding:36px 32px;max-width:360px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,0.3);text-align:center}
+.lock-icon{font-size:48px;margin-bottom:12px}
+.lock-title{font-size:20px;font-weight:800;color:#111827;margin-bottom:4px}
+.lock-sub{font-size:13px;color:#6b7280;margin-bottom:24px}
+.lock-input{width:100%;padding:12px 16px;border:2px solid #dde1ec;border-radius:8px;font-size:16px;text-align:center;letter-spacing:4px;outline:none;margin-bottom:8px;transition:border .15s}
+.lock-input:focus{border-color:var(--blue)}
+.lock-input.err{border-color:var(--red);animation:shake .3s}
+@keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}
+.lock-btn{width:100%;padding:12px;background:var(--blue);color:#fff;border:none;border-radius:8px;font-size:15px;font-weight:700;cursor:pointer;margin-top:8px}
+.lock-err{font-size:12px;color:var(--red);min-height:18px;margin-bottom:4px}
+/* Header */
+.hdr{background:var(--blue);padding:12px 16px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px}
+.hdr-title{font-size:16px;font-weight:700;color:#fff}
+.hdr-sub{font-size:11px;color:#bfd4ff;margin-top:1px}
+.badge{background:rgba(255,255,255,.18);color:#e0eaff;border-radius:20px;padding:3px 10px;font-size:11px;white-space:nowrap}
+.badge-white{background:#fff;color:var(--blue);border-radius:20px;padding:3px 10px;font-size:12px;font-weight:700}
+.badge-orange{background:var(--orangel);color:var(--orange);border:1px solid var(--orangebd);border-radius:20px;padding:3px 10px;font-size:12px;font-weight:700}
+.hdr-btn{padding:5px 12px;border-radius:20px;border:1px solid rgba(255,255,255,.4);background:rgba(255,255,255,.15);color:#fff;cursor:pointer;font-size:12px;font-weight:600}
+.hdr-btn:disabled{opacity:.35;cursor:default}
+/* Nav */
+.nav{background:#fff;border-bottom:1px solid var(--border);display:flex;overflow-x:auto}
+.nav-btn{padding:0 16px;border:none;background:transparent;cursor:pointer;font-size:13px;font-weight:600;color:var(--sub);white-space:nowrap;border-bottom:2px solid transparent;transition:all .12s;height:44px;display:inline-flex;align-items:center}
+.nav-btn.active{color:var(--blue);border-bottom-color:var(--blue)}
+/* Page */
+.page{padding:14px;max-width:960px;margin:0 auto}
+/* Cards */
+.card{background:#fff;border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:16px}
+/* Filter */
+.chip{padding:0 14px;border-radius:20px;border:1px solid var(--border);background:#fff;color:var(--sub);cursor:pointer;font-size:12px;font-weight:500;height:44px;display:inline-flex;align-items:center}
+.chip.on{border-color:var(--blue);background:var(--bluel);color:var(--blue)}
+/* Table */
+.tbl-head{display:grid;gap:6px;padding:5px 12px;background:#eef1fb;font-size:10px;font-weight:700;color:var(--faint);text-transform:uppercase;letter-spacing:.05em;border:1px solid var(--border);border-bottom:none}
+.tbl-body{border:1px solid var(--border);border-radius:0 0 8px 8px;overflow:visible}
+.tbl-row{display:grid;gap:6px;align-items:center;padding:7px 12px;border-bottom:1px solid var(--border);background:#fff}
+.tbl-row:last-child{border-bottom:none}
+.tbl-row.alt{background:#f8f9ff}
+.tbl-row.ersetzt{border-left:3px solid var(--orange);background:var(--orangel)}
+.tbl-wrap{border-radius:8px;overflow:hidden;margin-bottom:8px}
+/* Stepper */
+.stepper{display:flex;align-items:center;gap:2px;width:136px}
+.step-btn{width:44px;height:44px;flex-shrink:0;border-radius:8px;border:1px solid #c5cae9;background:#fff;color:#374151;cursor:pointer;font-size:22px;font-weight:300;display:flex;align-items:center;justify-content:center;padding:0;line-height:1}
+.step-btn:disabled{border-color:#e5e7eb;background:#f9fafb;color:#9ca3af;cursor:default}
+.step-btn.plus{border-color:var(--blue);background:var(--blue);color:#fff}
+.step-num{width:44px;height:44px;flex-shrink:0;text-align:center;border:1px solid var(--border);border-radius:8px;font-size:15px;font-weight:700;color:var(--faint);background:#fff;outline:none;padding:0}
+.step-num.has{border-color:var(--blue);background:var(--bluel);color:var(--blue)}
+/* Inputs */
+.inp{border:1px solid var(--border);border-radius:6px;padding:8px 12px;font-size:13px;color:var(--text);background:#fff;width:100%;outline:none;min-height:44px}
+.inp:focus{border-color:var(--blue)}
+.label{font-size:10px;color:var(--sub);font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px}
+/* Buttons */
+.btn{padding:10px 20px;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;min-height:44px}
+.btn-blue{background:var(--blue);color:#fff}
+.btn-gray{background:#374151;color:#fff}
+.btn-green{background:var(--green);color:#fff}
+.btn-red{background:var(--redl);color:var(--red);border:1px solid var(--redbd)}
+.btn-sm{padding:0 14px;font-size:12px;height:44px}
+/* Modal */
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;z-index:1000;padding:16px}
+.modal{background:#fff;border-radius:12px;padding:24px;max-width:500px;width:100%;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.25)}
+/* Stats */
+.stats{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px}
+.stat{border-radius:8px;padding:11px 16px;flex:1;min-width:80px}
+.stat-n{font-size:26px;font-weight:800;line-height:1}
+.stat-l{font-size:10px;font-weight:700;margin-top:4px;text-transform:uppercase;letter-spacing:.04em}
+/* Utils */
+.sap{font-family:monospace;font-weight:700;font-size:12px}
+.sap-blue{color:var(--blue)}
+.sap-orange{color:var(--orange)}
+.pill{display:inline-block;padding:2px 7px;border-radius:10px;font-size:10px;font-weight:700}
+.pill-orange{background:var(--orangel);color:var(--orange);border:1px solid var(--orangebd)}
+.pill-green{background:var(--greenl);color:var(--green);border:1px solid var(--greenbd)}
+.pill-red{background:var(--redl);color:var(--red);border:1px solid var(--redbd)}
+.pill-blue{background:var(--bluel);color:var(--blue);border:1px solid var(--bluem)}
+.flex{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.mt4{margin-top:4px} .mt8{margin-top:8px} .mt12{margin-top:12px} .mt16{margin-top:16px}
+.mb4{margin-bottom:4px} .mb8{margin-bottom:8px} .mb12{margin-bottom:12px} .mb16{margin-bottom:16px}
+.text-sub{font-size:12px;color:var(--sub)}
+.text-xs{font-size:11px;color:var(--faint)}
+.hidden{display:none}
+/* Import preview list */
+.import-list{max-height:260px;overflow-y:auto;border:1px solid var(--border);border-radius:8px}
+.import-row{display:grid;grid-template-columns:20px 1fr 20px 1fr;gap:8px;align-items:center;padding:7px 12px;border-bottom:1px solid var(--border)}
+.import-row:last-child{border-bottom:none}
+/* Bereich header */
+.bereich-hdr{background:var(--blue);border-radius:8px 8px 0 0;padding:7px 14px;font-size:11px;font-weight:700;color:#fff;letter-spacing:.07em;text-transform:uppercase;margin-top:16px}
+/* Settings */
+.setting-row{display:flex;flex-direction:column;gap:6px;padding:10px 0;border-bottom:1px solid var(--border)}
+.setting-row:last-child{border-bottom:none}
+</style>
+</head>
+<body>
+
+<!-- LOCK SCREEN -->
+<div id="lockscreen">
+  <div class="lock-card">
+    <div class="lock-icon">🏥</div>
+    <div class="lock-title">Lager-Bestellsystem</div>
+    <div class="lock-sub">Herzkatheterlabor · Bitte Passwort eingeben</div>
+    <div class="lock-err" id="lock-err"></div>
+    <input class="lock-input" type="password" id="lock-pw" placeholder="••••••" onkeydown="if(event.key==='Enter')tryUnlock()">
+    <button class="lock-btn" onclick="tryUnlock()">Anmelden</button>
+    <div style="font-size:11px;color:#9ca3af;margin-top:16px">Standard-Passwort: <strong>HKL2024</strong><br>Änderbar unter ⚙ Einstellungen</div>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="app" class="hidden">
+
+  <!-- HEADER -->
+  <div class="hdr">
+    <div>
+      <div class="hdr-title">⚕ Lager-Bestellsystem</div>
+      <div class="hdr-sub">Herzkatheterlabor · CGM MUSE</div>
+    </div>
+    <div class="flex">
+      <span class="badge-white" id="hdr-pos" style="display:none"></span>
+      <span class="badge-orange" id="hdr-ers" style="display:none"></span>
+      <span class="badge" id="hdr-total"></span>
+      <button class="hdr-btn" id="hdr-new-btn" onclick="confirmNeueBestellung()" disabled>+ Neue Bestellung</button>
+    </div>
+  </div>
+
+  <!-- NAV -->
+  <div class="nav">
+    <button class="nav-btn active" onclick="setView('bestellen')">📋 Bestellen</button>
+    <button class="nav-btn" onclick="setView('export')">📤 Export</button>
+    <button class="nav-btn" onclick="setView('artikel')">➕ Artikel</button>
+    <button class="nav-btn" onclick="setView('ersatz')">🔄 Ersatz</button>
+    <button class="nav-btn" onclick="setView('settings')">⚙ Einstellungen</button>
+  </div>
+
+  <div class="page" id="page-content"></div>
+</div>
+
+<!-- MODALS -->
+<div class="modal-bg hidden" id="modal-reset">
+  <div class="modal">
+    <div style="font-size:22px;margin-bottom:8px">🗑️</div>
+    <div style="font-size:16px;font-weight:700;margin-bottom:8px">Neue Bestellung anlegen?</div>
+    <div class="text-sub mb16" id="modal-reset-text"></div>
+    <div class="flex" style="justify-content:flex-end">
+      <button class="btn btn-gray btn-sm" onclick="hideModal('modal-reset')">Abbrechen</button>
+      <button class="btn btn-red btn-sm" onclick="doNeueBestellung()">✓ Ja, neue Bestellung starten</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-bg hidden" id="modal-export">
+  <div class="modal">
+    <div style="font-size:16px;font-weight:700;margin-bottom:6px">📤 Bestellung exportieren</div>
+    <div class="text-sub mb16">Wähle eine Methode:</div>
+
+    <!-- Download -->
+    <div class="card mb8" style="border-color:#a5b4fc">
+      <div style="font-size:13px;font-weight:700;color:var(--blue);margin-bottom:4px">💾 Als Datei herunterladen</div>
+      <div class="text-xs mb8">Speichert die CSV-Datei auf dein Gerät. Danach per E-Mail weiterleiten.</div>
+      <button class="btn btn-blue btn-sm" onclick="downloadCSV()">⬇ Als Excel (.xlsx) herunterladen</button>
+      <span id="dl-ok" style="font-size:12px;color:var(--green);margin-left:10px;display:none">✓ Gespeichert!</span>
+    </div>
+
+    <!-- Email via EmailJS -->
+    <div class="card mb8" style="border-color:var(--greenbd)" id="email-card">
+      <div style="font-size:13px;font-weight:700;color:var(--green);margin-bottom:4px">📧 Direkt per E-Mail versenden</div>
+      <div class="text-xs mb8" id="email-setup-hint"></div>
+      <div id="email-form-area">
+        <div class="mb8">
+          <div class="label">Empfänger</div>
+          <input class="inp" id="email-to" type="email" placeholder="einkauf@klinik.de">
+        </div>
+        <div class="mb8">
+          <div class="label">Absender-Name</div>
+          <input class="inp" id="email-from-name" placeholder="z.B. Marcel Kubitzek, HKL">
+        </div>
+        <div class="mb12">
+          <div class="label">Nachricht (optional)</div>
+          <textarea class="inp" id="email-msg" rows="2" placeholder="z.B. Lagerbestellung KW 15"></textarea>
+        </div>
+        <button class="btn btn-green btn-sm" onclick="sendEmail()" id="email-send-btn">📧 E-Mail senden</button>
+        <span id="email-status" style="font-size:12px;margin-left:10px"></span>
+      </div>
+      <div id="email-not-configured" class="hidden">
+        <div style="font-size:12px;color:var(--orange)">⚠ EmailJS noch nicht eingerichtet. Bitte unter ⚙ Einstellungen konfigurieren.</div>
+      </div>
+    </div>
+
+    <!-- Copy -->
+    <div class="card mb16">
+      <div style="font-size:13px;font-weight:700;color:var(--mid);margin-bottom:4px">📋 In Zwischenablage kopieren</div>
+      <div class="text-xs mb8">CSV-Inhalt kopieren und manuell einfügen.</div>
+      <button class="btn btn-gray btn-sm" onclick="copyCSV()" id="copy-btn">📋 Kopieren</button>
+    </div>
+
+    <div class="flex" style="justify-content:flex-end">
+      <button class="btn btn-gray btn-sm" onclick="hideModal('modal-export')">Schließen</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-bg hidden" id="modal-pw-vorschau">
+  <div class="modal">
+    <div style="font-size:16px;font-weight:700;margin-bottom:6px">📋 Produktwechsel-Import Vorschau</div>
+    <div class="text-xs mb12" id="pw-dateiname"></div>
+    <div class="stats mb12" id="pw-stats"></div>
+    <div id="pw-treffer-area"></div>
+    <div class="card" style="background:#f8f9ff;font-size:12px;color:var(--sub);margin-bottom:14px">
+      ℹ️ Bestehende manuelle Regeln bleiben erhalten. Nur Excel-Regeln werden ersetzt.
+    </div>
+    <div class="flex" style="justify-content:flex-end">
+      <button class="btn btn-gray btn-sm" onclick="hideModal('modal-pw-vorschau')">Abbrechen</button>
+      <button class="btn btn-blue btn-sm" id="pw-confirm-btn" onclick="pwImportBestaetigen()">✓ Übernehmen</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-bg hidden" id="modal-artikel-import">
+  <div class="modal">
+    <div style="font-size:16px;font-weight:700;margin-bottom:6px">📂 Artikel Import Vorschau</div>
+    <div class="import-list mb12" id="art-import-list"></div>
+    <div class="flex" style="justify-content:flex-end">
+      <button class="btn btn-gray btn-sm" onclick="hideModal('modal-artikel-import')">Abbrechen</button>
+      <button class="btn btn-green btn-sm" id="art-import-confirm" onclick="artImportBestaetigen()">✓ Hinzufügen</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── Data ──────────────────────────────────────────────────────────────────────
+const STAMM = [
+  { id: 1,  bereich: "Untersuchungsräume", bezeichnung: "Leukoplast wasserfest weiß 2,5cm", sapNr: "100032435", verpackung: "12 Rollen" },
+  { id: 2,  bereich: "Untersuchungsräume", bezeichnung: "Leukosilk ideal 5cm", sapNr: "100032442", verpackung: "6 Rollen" },
+  { id: 3,  bereich: "Untersuchungsräume", bezeichnung: "Leukosilk ideal 2,5cm", sapNr: "100032441", verpackung: "12 Rollen" },
+  { id: 4,  bereich: "Untersuchungsräume", bezeichnung: "Hansaplast Strips 1,9 x 7,2cm", sapNr: "100032449", verpackung: "1 Packung = 100 Stck." },
+  { id: 5,  bereich: "Untersuchungsräume", bezeichnung: "Elektrodencreme 100g", sapNr: "105006611", verpackung: "1 Tube" },
+  { id: 6,  bereich: "Untersuchungsräume", bezeichnung: "Klebeelektroden EKG f.Erw. mit Gel", sapNr: "103045078", verpackung: "30 Stck." },
+  { id: 7,  bereich: "Untersuchungsräume", bezeichnung: "Druckmess-Set 2-fach", sapNr: "103049369", verpackung: "25 Stck. /1Kart." },
+  { id: 8,  bereich: "Untersuchungsräume", bezeichnung: "Tabotamp 5,0 x35", sapNr: "100026403", verpackung: "1 Pack. = 10 Stck." },
+  { id: 9,  bereich: "Untersuchungsräume", bezeichnung: "Parker Aquasonic Ultraschall-Gel 48x20g", sapNr: "103044391", verpackung: "48St x 20g / 1Kart." },
+  { id: 10, bereich: "Untersuchungsräume", bezeichnung: "Parker Aquasonic Ultraschall-Gel 250g", sapNr: "103015882", verpackung: "12 Flas. a. 250g / 1 Kart." },
+  { id: 11, bereich: "Untersuchungsräume", bezeichnung: "Parker Aquasonic Ultraschall-Gel 5L", sapNr: "100006354", verpackung: "1 Kanister a. 5L" },
+  { id: 12, bereich: "Untersuchungsräume", bezeichnung: "Brava Pflasterentferner-Spray 50ml", sapNr: "103016835", verpackung: "1 Karton = 48Stck." },
+  { id: 13, bereich: "Untersuchungsräume", bezeichnung: "ESENTA reizfreie Pflasterentferner-Tücher", sapNr: "105004404", verpackung: "1 pack. 30 Stck." },
+  { id: 14, bereich: "Untersuchungsräume", bezeichnung: "OP-Licht Griffüberzug", sapNr: "103020826", verpackung: "1 Pack = 50 St." },
+  { id: 15, bereich: "Untersuchungsräume", bezeichnung: "Kameraüberzug mit elasticher Öffnung", sapNr: "103046665", verpackung: "25 Stck. /1Kart" },
+  { id: 16, bereich: "Untersuchungsräume", bezeichnung: "Trixo-Lind Handcreme 100ml tube", sapNr: "103029973", verpackung: "" },
+  { id: 17, bereich: "Untersuchungsräume", bezeichnung: "Quik-Combo Defi Pads", sapNr: "103019892", verpackung: "" },
+  { id: 18, bereich: "Untersuchungsräume", bezeichnung: "Euro-Defipads Lifepak", sapNr: "103050805", verpackung: "" },
+  { id: 19, bereich: "Untersuchungsräume", bezeichnung: "Arterienpunktionsset radial 20G", sapNr: "103019488", verpackung: "1 Pack = 8 St." },
+  { id: 20, bereich: "Untersuchungsräume", bezeichnung: "Druckmesssystem für Int. (femoral)", sapNr: "103049369", verpackung: "1 Pack = 25 St." },
+  { id: 21, bereich: "Untersuchungsräume", bezeichnung: "Arterie für femoral (EPU)", sapNr: "100007513", verpackung: "1 Pack = 20 St." },
+  { id: 22, bereich: "Gerätelager", bezeichnung: "Abfallbehälter 9l hoch (sharpsafe 9l)", sapNr: "105006150", verpackung: "1 Stück" },
+  { id: 23, bereich: "Gerätelager", bezeichnung: "OP Maske m. Bindeband", sapNr: "103028806", verpackung: "1 Karton" },
+  { id: 24, bereich: "Gerätelager", bezeichnung: "OP Maske m. Gummiband (Facemask)", sapNr: "105000315", verpackung: "1 Karton = 300Stk." },
+  { id: 25, bereich: "Gerätelager", bezeichnung: "OP-Maske blau antifog (mit Schaumstoff) zum binden", sapNr: "103049210", verpackung: "" },
+  { id: 26, bereich: "Gerätelager", bezeichnung: "OP Haube grün Astronaut", sapNr: "105004476", verpackung: "" },
+  { id: 27, bereich: "Gerätelager", bezeichnung: "Sentnex Nova Schwesternhaube", sapNr: "105004474", verpackung: "1 Karton" },
+  { id: 28, bereich: "Gerätelager", bezeichnung: "Einmalbaretthaube Patienten grün", sapNr: "100032624", verpackung: "" },
+  { id: 29, bereich: "Gerätelager", bezeichnung: "Binden Lenkideal 5m:20cm 6 Stck.", sapNr: "103036590", verpackung: "10 Stück 1Karton" },
+  { id: 30, bereich: "Gerätelager", bezeichnung: "Handschuhe Protexis Latex Micro 6,5", sapNr: "2D72NT65X", verpackung: "" },
+  { id: 31, bereich: "Gerätelager", bezeichnung: "Handschuhe Protexis Latex Micro 7,5", sapNr: "2D72NT75X", verpackung: "1x" },
+  { id: 32, bereich: "Gerätelager", bezeichnung: "Handschuhe Protexis Latex Micro 8", sapNr: "2D72NT80X", verpackung: "1x" },
+  { id: 33, bereich: "Gerätelager", bezeichnung: "Handschuhe Protexis Latex Micro 7", sapNr: "2D72NT70X", verpackung: "1x" },
+  { id: 34, bereich: "Gerätelager", bezeichnung: "Handschuhe Protexis Latex Micro 8,5", sapNr: "2D72NT85X", verpackung: "" },
+  { id: 35, bereich: "Gerätelager", bezeichnung: "OP-Tischabdecktuch 150 x 190cm", sapNr: "10001930", verpackung: "Karton = 44 Stck." },
+  { id: 36, bereich: "Gerätelager", bezeichnung: "Atemschutzmaske FFP2/KN95", sapNr: "105008093", verpackung: "" },
+  { id: 37, bereich: "Gerätelager", bezeichnung: "Angiokard Kunststoffschalen 1000ml", sapNr: "105004047", verpackung: "1 Pk. = 20 St." },
+  { id: 38, bereich: "Gerätelager", bezeichnung: "Wäschesack für Patienteneigentum", sapNr: "103029847", verpackung: "1 Stück" },
+  { id: 39, bereich: "Gerätelager", bezeichnung: "Auffangbeutel (Kotzbeutel)", sapNr: "105005498", verpackung: "1 Pack. = 50 Stk." },
+  { id: 40, bereich: "Gerätelager", bezeichnung: "Nierenschalen Defix plastik", sapNr: "103030275", verpackung: "" },
+  { id: 41, bereich: "Gerätelager", bezeichnung: "Sauerstoffmaske für Erw. (Beatmungsmaske)", sapNr: "103015661", verpackung: "50 Stck/1 Karton" },
+  { id: 42, bereich: "Gerätelager", bezeichnung: "Sauerstoffbrille ohne Schaumstoff", sapNr: "100002520", verpackung: "50 stck." },
+  { id: 43, bereich: "Gerätelager", bezeichnung: "Sauerstoffverbindungsleitung 10m", sapNr: "100006150", verpackung: "50 Stck." },
+  { id: 44, bereich: "Gerätelager", bezeichnung: "Fingertip Saugunterbrecher", sapNr: "100003105", verpackung: "100 Stck" },
+  { id: 45, bereich: "Gerätelager", bezeichnung: "Absaugrohr Yancauer CH18", sapNr: "103045079", verpackung: "1 Stck." },
+  { id: 46, bereich: "Gerätelager", bezeichnung: "Absaugkatheter 2 Augen CH 16 Orange", sapNr: "100001775", verpackung: "" },
+  { id: 47, bereich: "Gerätelager", bezeichnung: "Absaugkatheter 2 Augen CH 14 Grün", sapNr: "100001774", verpackung: "100 Stck" },
+  { id: 48, bereich: "Gerätelager", bezeichnung: "Absaugschlauch CH 25/ 200 cm", sapNr: "105005434", verpackung: "50 Stck" },
+  { id: 49, bereich: "Gerätelager", bezeichnung: "Vacu Smart Absaugbeutel 700ml", sapNr: "103003967", verpackung: "25 St. /Karton" },
+  { id: 50, bereich: "Gerätelager", bezeichnung: "Saug-Adapter für OptiFlo 4300460099", sapNr: "103005514", verpackung: "10 St./Pack" },
+  { id: 51, bereich: "Gerätelager", bezeichnung: "Fixiermanschetten Kletten 40 x 5 cm", sapNr: "100002017", verpackung: "1 Stck" },
+  { id: 52, bereich: "Gerätelager", bezeichnung: "Klebesensor LNCS Neo 2329", sapNr: "101192896", verpackung: "20 Stck." },
+  { id: 53, bereich: "Gerätelager", bezeichnung: "Angiokard Coro-SetT (Kardiologie-Set)", sapNr: "105006214", verpackung: "1 Stck." },
+  { id: 54, bereich: "Gerätelager", bezeichnung: "Druckverband Ellipse", sapNr: "103025440", verpackung: "400 St." },
+  { id: 55, bereich: "Gerätelager", bezeichnung: "Schrittmacherset HGGCV 108", sapNr: "103031197", verpackung: "5Stck/1Karton" },
+  { id: 56, bereich: "Gerätelager", bezeichnung: "Essential OP Mantel unv. XXL dünn 3516CEC", sapNr: "103016489", verpackung: "K = 24 stück" },
+  { id: 57, bereich: "Gerätelager", bezeichnung: "NIV Maske AF 531 SE CapStrap L", sapNr: "103053702", verpackung: "" },
+  { id: 58, bereich: "Gerätelager", bezeichnung: "NIV Maske AF 531 SE CapStrap M", sapNr: "103053701", verpackung: "" },
+  { id: 59, bereich: "Gerätelager", bezeichnung: "NIV Maske AF 531 SE CapStrap S", sapNr: "105005015", verpackung: "" },
+  { id: 60, bereich: "Gerätelager", bezeichnung: "PerforMax Vollgesichtsmaske NIV XL", sapNr: "103021885", verpackung: "" },
+  { id: 61, bereich: "Gerätelager", bezeichnung: "Ambu SpurrII Einweg Beatmungsbeutel Erw.", sapNr: "105007068", verpackung: "1Stck" },
+  { id: 62, bereich: "Gerätelager", bezeichnung: "Schutzkittel XL Komfort Gelb", sapNr: "AIG4016", verpackung: "100 St. /Karton" },
+  { id: 63, bereich: "Gerätelager", bezeichnung: "Angiographie-Tuch einzeln 330 x 208 cm", sapNr: "103047725", verpackung: "5 St. /Karton" },
+  { id: 64, bereich: "Gerätelager", bezeichnung: "Vasco Nitril blue S", sapNr: "103013593", verpackung: "150 St./Karton" },
+  { id: 65, bereich: "Gerätelager", bezeichnung: "Vasco Nitril blue M", sapNr: "103013592", verpackung: "" },
+  { id: 66, bereich: "Gerätelager", bezeichnung: "Vasco Nitril blue L", sapNr: "103013591", verpackung: "" },
+  { id: 67, bereich: "Gerätelager", bezeichnung: "Nitra Touch L (Grün) Reinigung", sapNr: "103048752", verpackung: "" },
+  { id: 68, bereich: "Gerätelager", bezeichnung: "Angiodyn Schale 1.000ml Blau", sapNr: "103053230", verpackung: "" },
+  { id: 69, bereich: "Gerätelager", bezeichnung: "Ambu-Beutel Adapter Mark III für O2-Ventil", sapNr: "105002890", verpackung: "" },
+  { id: 70, bereich: "Gerätelager", bezeichnung: "Cryo-Tank N2O-Kuehlmittelbehaelter 103NE", sapNr: "103011080", verpackung: "4 Stk. & 4 Abh." },
+  { id: 71, bereich: "Vorbereitungsraum", bezeichnung: "Vasofix Braunüle 20G rosa", sapNr: "100001897", verpackung: "" },
+  { id: 72, bereich: "Vorbereitungsraum", bezeichnung: "Vasofix Braunüle 18G grün/weiß (kurz 33mm)", sapNr: "100003916", verpackung: "1 Kart." },
+  { id: 73, bereich: "Vorbereitungsraum", bezeichnung: "Vasofix Braunüle 18G grün (lang 45mm)", sapNr: "100001898", verpackung: "1 Kart." },
+  { id: 74, bereich: "Vorbereitungsraum", bezeichnung: "Vasofix Braunüle 17G weiß", sapNr: "100001899", verpackung: "" },
+  { id: 75, bereich: "Vorbereitungsraum", bezeichnung: "Vasofix Braunüle 16G grau", sapNr: "100001900", verpackung: "" },
+  { id: 76, bereich: "Vorbereitungsraum", bezeichnung: "Skalpell Feather 11 steril", sapNr: "200130011", verpackung: "1 Kart." },
+  { id: 77, bereich: "Vorbereitungsraum", bezeichnung: "Skalpell Feather 10 steril", sapNr: "200130010", verpackung: "1 Kart." },
+  { id: 78, bereich: "Vorbereitungsraum", bezeichnung: "Überleitungskanüle Transfer Set", sapNr: "4090500", verpackung: "1 Kart." },
+  { id: 79, bereich: "Vorbereitungsraum", bezeichnung: "HUH Einmal Trinkbecher 200ml", sapNr: "103048066", verpackung: "Pack/100Stck" },
+  { id: 80, bereich: "Vorbereitungsraum", bezeichnung: "Minicups für Tabletten 50ml", sapNr: "103015659", verpackung: "75 Stck." },
+  { id: 81, bereich: "Vorbereitungsraum", bezeichnung: "Schlauchverband TG 3", sapNr: "103036618", verpackung: "" },
+  { id: 82, bereich: "Vorbereitungsraum", bezeichnung: "Pflastervlies zur Verbandsfixierung 10cm (Fixomull)", sapNr: "103036921", verpackung: "" },
+  { id: 83, bereich: "Vorbereitungsraum", bezeichnung: "Cutiplast Vlies Wundverband 10 x 8 cm", sapNr: "101182757", verpackung: "1x" },
+  { id: 84, bereich: "Vorbereitungsraum", bezeichnung: "Cutiplast Vlies Wundverband 15 x 8 cm", sapNr: "100032473", verpackung: "1x" },
+  { id: 85, bereich: "Vorbereitungsraum", bezeichnung: "Kanülenpflaster steril", sapNr: "100032462", verpackung: "1x" },
+  { id: 86, bereich: "Vorbereitungsraum", bezeichnung: "Tegaderm Folien PVK-Verband", sapNr: "100033614", verpackung: "1 Pack. = 100 Stk." },
+  { id: 87, bereich: "Vorbereitungsraum", bezeichnung: "Einmal Kornzange steril 265mm", sapNr: "103014210", verpackung: "1 Stck." },
+  { id: 88, bereich: "Vorbereitungsraum", bezeichnung: "Einmal Nadelhalter Mayo-Hegar", sapNr: "101194509", verpackung: "1 Pack = 25Stk." },
+  { id: 89, bereich: "Vorbereitungsraum", bezeichnung: "Einmal Schere gerade", sapNr: "103013662", verpackung: "1 Pack = 20 Stk." },
+  { id: 90, bereich: "Vorbereitungsraum", bezeichnung: "Softasept gefärbt 1000ml", sapNr: "100001528", verpackung: "" },
+  { id: 91, bereich: "Vorbereitungsraum", bezeichnung: "Zuleitungsverschluss Safeflow", sapNr: "103019460", verpackung: "1 Pckg. 50 Stck" },
+  { id: 92, bereich: "Vorbereitungsraum", bezeichnung: "SwabCap Desinfektionskappe für Rückschlagventil", sapNr: "3048770", verpackung: "" },
+  { id: 93, bereich: "Vorbereitungsraum", bezeichnung: "Opsite IV3000 Fixierpflaster 10x12cm", sapNr: "101194375", verpackung: "" },
+  { id: 94, bereich: "Vorbereitungsraum", bezeichnung: "Tegaderm Transparentverband 10cmx12cm", sapNr: "101181651", verpackung: "" },
+  { id: 95, bereich: "Vorbereitungsraum", bezeichnung: "Octeniderm farblos 250ml", sapNr: "105005156", verpackung: "" },
+  { id: 96, bereich: "Vorbereitungsraum", bezeichnung: "Steri-Strip 6mm x 38mm", sapNr: "101183910", verpackung: "" },
+  { id: 97,  bereich: "Lager", bezeichnung: "BGA Spritze 2ml 50er Pack.", sapNr: "105001557", verpackung: "1 Pack = 50Stk." },
+  { id: 98,  bereich: "Lager", bezeichnung: "Injekt Spritze Einmal Luer Solo 2ml", sapNr: "100002594", verpackung: "1 Karton = 100Stk." },
+  { id: 99,  bereich: "Lager", bezeichnung: "Injekt Spritze Einmal Luer Solo 5ml", sapNr: "100002611", verpackung: "1 Karton = 100Stk." },
+  { id: 100, bereich: "Lager", bezeichnung: "Injekt Spritze Einmal Luer Solo 10ml", sapNr: "105007859", verpackung: "1 Karton = 100Stk." },
+  { id: 101, bereich: "Lager", bezeichnung: "Injekt Spritze Einmal Luer Solo 20ml", sapNr: "100002613", verpackung: "1 Karton = 100Stk." },
+  { id: 102, bereich: "Lager", bezeichnung: "Omnifix 3ml Luer Lock", sapNr: "100003209", verpackung: "1 Karton = 100Stk." },
+  { id: 103, bereich: "Lager", bezeichnung: "Omnifix 5ml Luer Lock", sapNr: "100003210", verpackung: "1 Karton = 100Stk." },
+  { id: 104, bereich: "Lager", bezeichnung: "Omnifix 10ml Luer Lock", sapNr: "100003211", verpackung: "1 Karton = 100Stk." },
+  { id: 105, bereich: "Lager", bezeichnung: "Omnifix 20ml Luer Lock", sapNr: "100003212", verpackung: "1 Karton = 100Stk." },
+  { id: 106, bereich: "Lager", bezeichnung: "Omnifix 30ml Luer Lock", sapNr: "100003213", verpackung: "1 Karton = 100Stk." },
+  { id: 107, bereich: "Lager", bezeichnung: "Spritze Perfusor LL 50ml mit Kanüle", sapNr: "100002620", verpackung: "1 Karton = 100Stk." },
+  { id: 108, bereich: "Lager", bezeichnung: "Sterican Punktionskanüle gelb lang 20G", sapNr: "105008387", verpackung: "1 Karton = 100Stk." },
+  { id: 109, bereich: "Lager", bezeichnung: "Sterican Safety 0.45x13mm 26G braun (subcutan)", sapNr: "103043824", verpackung: "1 Karton = 100Stk." },
+  { id: 110, bereich: "Lager", bezeichnung: "Sterican Safety 0,70x40mm 22G grau (Lokale femoral)", sapNr: "103043825", verpackung: "1 Karton = 100Stk." },
+  { id: 111, bereich: "Lager", bezeichnung: "Sterican 18G Aufziehkanüle", sapNr: "105008388", verpackung: "1 Karton = 100Stk." },
+  { id: 112, bereich: "Lager", bezeichnung: "Intrafix Safeset P 4063000 (Infusionssystem)", sapNr: "103005858", verpackung: "1 Karton = 100Stk." },
+  { id: 113, bereich: "Lager", bezeichnung: "Infusiomaten Infusionsleitung Spaceline", sapNr: "103013034", verpackung: "1 Karton = 100Stk." },
+  { id: 114, bereich: "Lager", bezeichnung: "Heidelbergerverlängerung 140cm", sapNr: "100003025", verpackung: "1 Karton = 100Stk." },
+  { id: 115, bereich: "Lager", bezeichnung: "Perfusorleitung 1,5x2,7 300cm", sapNr: "105004067", verpackung: "100 Stück" },
+  { id: 116, bereich: "Lager", bezeichnung: "Discofix Dreiwegehahn blau steril", sapNr: "101196454", verpackung: "1 Karton" },
+  { id: 117, bereich: "Lager", bezeichnung: "Mini-Spike mit Partikelfilter", sapNr: "100003103", verpackung: "50 Stück" },
+  { id: 118, bereich: "Lager", bezeichnung: "Verschlusskonus LL steril rot / Combistopfen", sapNr: "100003122", verpackung: "100 Stück" },
+  { id: 119, bereich: "Lager", bezeichnung: "Rasierer Einmal Kunststoff unsteril", sapNr: "105006217", verpackung: "1 Stück" },
+  { id: 120, bereich: "Lager", bezeichnung: "Kompressen 10 x 20 cm unsteril 12fach", sapNr: "100032390", verpackung: "1x" },
+  { id: 121, bereich: "Lager", bezeichnung: "Kompressen 10 x 10 cm unsteril 8fach", sapNr: "103036610", verpackung: "1x" },
+  { id: 122, bereich: "Lager", bezeichnung: "Telacomp ES-K st 10x10 12f (Sterile Kompressen)", sapNr: "105005288", verpackung: "" },
+  { id: 123, bereich: "Lager", bezeichnung: "Leukoplast Swab Abdom 45x45cm (Bauchtücher)", sapNr: "105007309", verpackung: "1 Pak. a 30 St." },
+  { id: 124, bereich: "Lager", bezeichnung: "Discofix Dreiwegehahn mit Verlängerung Blau 10cm", sapNr: "101197794", verpackung: "50St. = 1Karton" },
+  { id: 125, bereich: "Lager", bezeichnung: "Medallion Spritze (Ersatz für KM-Spritze)", sapNr: "103053198", verpackung: "" },
+  { id: 126, bereich: "Spülraum", bezeichnung: "Abfallsack blau 700x1100x70 Rolle (120L)", sapNr: "101183071", verpackung: "" },
+  { id: 127, bereich: "Spülraum", bezeichnung: "Abfallsack schwarz 700x1100x70 Rolle (120L)", sapNr: "105005320", verpackung: "" },
+  { id: 128, bereich: "Spülraum", bezeichnung: "Abfallbeutel 30 ltr. 50 Stck 1 Rolle", sapNr: "105003821", verpackung: "1 Rolle = 50 Stk." },
+  { id: 129, bereich: "Spülraum", bezeichnung: "Drahtsackverschlüsse gelb für Abfallbeutel", sapNr: "103045509", verpackung: "1000 Stck." },
+  { id: 130, bereich: "Spülraum", bezeichnung: "Toilettenpapier Scott Tissue weiß", sapNr: "105000128", verpackung: "" },
+  { id: 131, bereich: "Spülraum", bezeichnung: "Einmal Handtuchpapier Scott weiß 1 Kart.", sapNr: "105008699", verpackung: "" },
+  { id: 132, bereich: "Spülraum", bezeichnung: "Handspülmittel 1 ltr. Flasche", sapNr: "100032620", verpackung: "" },
+  { id: 133, bereich: "Spülraum", bezeichnung: "Spülmaschinen Tabs SMA 35 1 Pckg.", sapNr: "105006407", verpackung: "1 Pack = 50 Stk." },
+  { id: 134, bereich: "Spülraum", bezeichnung: "Klarspülkonzentrat 5L 1 Kanister", sapNr: "103003604", verpackung: "" },
+  { id: 135, bereich: "Spülraum", bezeichnung: "Klarspülkonzentrat 1L 1 Flasche", sapNr: "103038492", verpackung: "" },
+  { id: 136, bereich: "Spülraum", bezeichnung: "Regeneriersalz grob 6kg 1 Eimer", sapNr: "103038796", verpackung: "" },
+  { id: 137, bereich: "Spülraum", bezeichnung: "Scheuermilch 500ml Grüne Serie", sapNr: "105003960", verpackung: "" },
+  { id: 138, bereich: "Spülraum", bezeichnung: "Korsalex AF 5ltr.", sapNr: "101197904", verpackung: "" },
+  { id: 139, bereich: "Spülraum", bezeichnung: "Softaskin pure Waschlotion", sapNr: "105003261", verpackung: "" },
+  { id: 140, bereich: "Spülraum", bezeichnung: "Entkalker Pro 130 für Maschinen/Küchengeräte", sapNr: "103038745", verpackung: "" },
+  { id: 141, bereich: "Spülraum", bezeichnung: "Abfallsäcke weiß 630x850mm 90L", sapNr: "103042323", verpackung: "40 Stck. pro Rolle" },
+  { id: 142, bereich: "Spülraum", bezeichnung: "Raumspray 300ml 1 Dose", sapNr: "103029659", verpackung: "" },
+  { id: 143, bereich: "Spülraum", bezeichnung: "WC-Bürste PPN m. Randreiniger", sapNr: "103008093", verpackung: "" },
+  { id: 144, bereich: "Spülraum", bezeichnung: "Bacillol AF Tücher Flow Pack", sapNr: "105005056", verpackung: "" },
+  { id: 145, bereich: "Spülraum", bezeichnung: "Haltbarkeitsetiketten 3 Mon.", sapNr: "103020929", verpackung: "" },
+  { id: 146, bereich: "Spülraum", bezeichnung: "Meliseptol Wipes Sensitive 100FP", sapNr: "105002084", verpackung: "" },
+  { id: 147, bereich: "Spülraum", bezeichnung: "Abfallsäcke transp. 320x320x740 60ltr.", sapNr: "103042792", verpackung: "" },
+  { id: 148, bereich: "Spülraum", bezeichnung: "Einmalschutzbezüge f. Schuhe", sapNr: "100032628", verpackung: "" },
+  { id: 149, bereich: "Spülraum", bezeichnung: "Steckbecken Deconex", sapNr: "103041667", verpackung: "" },
+  { id: 150, bereich: "Spülraum", bezeichnung: "Urinflasche m. Deckel", sapNr: "103043158", verpackung: "" },
+  { id: 151, bereich: "Spülraum", bezeichnung: "Trixo-lind pure Handcreme 100ml-Tube", sapNr: "103029973", verpackung: "" },
+  { id: 152, bereich: "Spülraum", bezeichnung: "Softa Man Acute Händedesinfektion 500ml", sapNr: "101194084", verpackung: "" },
+  { id: 153, bereich: "Spülraum", bezeichnung: "Promanum pure Händedesinfektion 500ml", sapNr: "103014687", verpackung: "" },
+  { id: 154, bereich: "Spülraum", bezeichnung: "Infa Box mit Dichtung 30l schwarz", sapNr: "103031057", verpackung: "" },
+  { id: 155, bereich: "Spülraum", bezeichnung: "Einmalmolltex (Molicare Premium) 60x90cm", sapNr: "103052810", verpackung: "" },
+  { id: 156, bereich: "Spülraum", bezeichnung: "Dismozon plus Flächendesinfektionsmittel 100x16g Beutel", sapNr: "101181518", verpackung: "" },
+  { id: 157, bereich: "Büromittel", bezeichnung: "Briefklammern 26mm verkupfert", sapNr: "", verpackung: "1000 Stück" },
+  { id: 158, bereich: "Büromittel", bezeichnung: "Briefumschlag Fenster SK DIN LG", sapNr: "", verpackung: "100 Stück" },
+  { id: 159, bereich: "Büromittel", bezeichnung: "Briefumschlag OH Fenster SK DIN LG", sapNr: "", verpackung: "100 Stück" },
+  { id: 160, bereich: "Büromittel", bezeichnung: "Druckpatrone schwarz HP 51645 AE", sapNr: "70020101", verpackung: "" },
+  { id: 161, bereich: "Büromittel", bezeichnung: "Druckpatrone schwarz HP 51626 A (FAX)", sapNr: "70020201", verpackung: "" },
+  { id: 162, bereich: "Büromittel", bezeichnung: "Batterie 1,5V BABY C (Laryngoskop)", sapNr: "55260403", verpackung: "" },
+  { id: 163, bereich: "Büromittel", bezeichnung: "Batterie 1,5V MIGNON AA (Uhren)", sapNr: "55260401", verpackung: "" },
+  { id: 164, bereich: "Büromittel", bezeichnung: "Batterie 1,5V MONO D (Stimulations-Gerät)", sapNr: "55260404", verpackung: "" },
+  { id: 165, bereich: "Büromittel", bezeichnung: "Batterie 9 VOLT E-BLOCK (Pass. Pacer)", sapNr: "55260501", verpackung: "" },
+  { id: 166, bereich: "Büromittel", bezeichnung: "Batterie 1,5V MICRO AAA", sapNr: "55260401", verpackung: "" },
+  { id: 167, bereich: "Büromittel", bezeichnung: "Batterie KNOPFZELLE CR2032", sapNr: "55260502", verpackung: "" },
+  { id: 168, bereich: "OP-Instrumente", bezeichnung: "Horizon Clips Titan Gefäß Clips blau (mittel)", sapNr: "103044194", verpackung: "1 Pack = 5x 6 Clips" },
+  { id: 169, bereich: "OP-Instrumente", bezeichnung: "Einmal chirurgische Pinzette gerade steril", sapNr: "103040637", verpackung: "1 Pack = 25 St." },
+  { id: 170, bereich: "OP-Instrumente", bezeichnung: "Einmal Anatomische Pinzette gerade steril", sapNr: "100019111", verpackung: "1 Pack = 25 St." },
+  { id: 171, bereich: "OP-Instrumente", bezeichnung: "Einweg Stapler (Hauttacker) mit 35 Klemmen je Tacker", sapNr: "105007372", verpackung: "1 Pack = 10 St." },
+  { id: 172, bereich: "OP-Instrumente", bezeichnung: "Instrumententischbezug steril 80x142cm", sapNr: "100031572", verpackung: "1 Pack = 50 St." },
+  { id: 173, bereich: "OP-Instrumente", bezeichnung: "Abdecktuch mit Kleberand 75x90cm steril", sapNr: "100003007", verpackung: "1 Pack = 160 St." },
+];
+
+const LS = {
+  pw:      'hkl_pw_v4',
+  mengen:  'hkl_mengen_v4',
+  ersatz:  'hkl_ersatz_v4',
+  artikel: 'hkl_artikel_v4',
+  pwinfo:  'hkl_pwinfo_v4',
+  ejs:     'hkl_emailjs_v4',
+};
+const APP_PW_DEFAULT = 'HKL2024';
+
+function ls(key, fb) { try { const v=localStorage.getItem(key); return v?JSON.parse(v):fb; } catch { return fb; } }
+function sv(key, val) { try { localStorage.setItem(key, JSON.stringify(val)); } catch {} }
+
+// ── State ─────────────────────────────────────────────────────────────────────
+let ST = {
+  view:    'bestellen',
+  filter:  'Alle',
+  suche:   '',
+  mengen:  ls(LS.mengen, {}),
+  ersatz:  ls(LS.ersatz, []),
+  artikel: ls(LS.artikel, null) || STAMM.map(a=>({...a})),
+  pwinfo:  ls(LS.pwinfo, null),
+  ejs:     ls(LS.ejs, {serviceId:'', templateId:'', publicKey:'', emailTo:'', fromName:''}),
+  pwVorschau: null,
+  artImportLog: null,
+  neuBereich: '',
+  neuBez: '',
+  neuSap: '',
+  neuVpk: '',
+};
+
+function save() {
+  sv(LS.mengen,  ST.mengen);
+  sv(LS.ersatz,  ST.ersatz);
+  sv(LS.artikel, ST.artikel);
+  sv(LS.pwinfo,  ST.pwinfo);
+  sv(LS.ejs,     ST.ejs);
+}
+
+// ── Lock ──────────────────────────────────────────────────────────────────────
+// ── Session timeout (60 min) ─────────────────────────────────────────────────
+const SESSION_MS = 60 * 60 * 1000; // 60 minutes
+let _sessionTimer = null;
+
+function startSession() {
+  sv('hkl_session', Date.now());
+  resetSessionTimer();
+  // Extend session on any user interaction
+  ['click','touchstart','keydown'].forEach(ev =>
+    document.addEventListener(ev, resetSessionTimer, {passive:true})
+  );
+}
+
+function resetSessionTimer() {
+  sv('hkl_session', Date.now());
+  clearTimeout(_sessionTimer);
+  _sessionTimer = setTimeout(lockApp, SESSION_MS);
+}
+
+function checkSession() {
+  const t = ls('hkl_session', 0);
+  if (t && (Date.now() - t) < SESSION_MS) {
+    startSession();
+    document.getElementById('lockscreen').style.display='none';
+    document.getElementById('app').classList.remove('hidden');
+    render();
+  }
+}
+
+function lockApp() {
+  clearTimeout(_sessionTimer);
+  sv('hkl_session', 0);
+  document.getElementById('lockscreen').style.display='flex';
+  document.getElementById('app').classList.add('hidden');
+  document.getElementById('lock-pw').value='';
+  document.getElementById('lock-err').textContent='Sitzung abgelaufen. Bitte erneut anmelden.';
+  document.getElementById('lock-err').style.color='var(--orange)';
+  document.getElementById('lock-pw').focus();
+}
+
+function hashPw(pw) { return btoa(encodeURIComponent(pw+'_hkl_salt_2024')); }
+function tryUnlock() {
+  const pw = document.getElementById('lock-pw').value;
+  const stored = ls(LS.pw, hashPw(APP_PW_DEFAULT));
+  // Support legacy plaintext pw during migration
+  if (pw === stored || hashPw(pw) === stored || (stored===APP_PW_DEFAULT&&pw===APP_PW_DEFAULT)) {
+    // Migrate plaintext pw to hash if needed
+    const stored2=ls(LS.pw,null);
+    if(!stored2||stored2===pw) sv(LS.pw, hashPw(pw));
+    startSession();
+    document.getElementById('lockscreen').style.display='none';
+    document.getElementById('app').classList.remove('hidden');
+    render();
+  } else {
+    const inp = document.getElementById('lock-pw');
+    inp.classList.add('err');
+    document.getElementById('lock-err').textContent = 'Falsches Passwort.';
+    setTimeout(()=>inp.classList.remove('err'), 400);
+    inp.value=''; inp.focus();
+  }
+}
+document.getElementById('lock-pw').addEventListener('keydown', e=>{ if(e.key==='Enter') tryUnlock(); });
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function ts() { const d=new Date(),p=n=>String(n).padStart(2,'0'); return `${d.getFullYear()}${p(d.getMonth()+1)}${p(d.getDate())}_${p(d.getHours())}${p(d.getMinutes())}`; }
+function ist9(s) { return /^\d{9}$/.test(String(s||'').trim()); }
+function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+let _ersatzMapCache=null;
+let _ersatzMapKey='';
+function ersatzMap() {
+  const key=ST.ersatz.length+'_'+ST.ersatz.map(e=>e.altNr).join(',');
+  if(_ersatzMapKey===key && _ersatzMapCache) return _ersatzMapCache;
+  const m={};
+  ST.ersatz.forEach(e=>{ if(e.altNr&&e.neuNr) m[e.altNr.trim()]=e; });
+  _ersatzMapCache=m; _ersatzMapKey=key;
+  return m;
+}
+function invalidateErsatzCache() { _ersatzMapCache=null; _ersatzMapKey=''; }
+function getEff(a) {
+  const em=ersatzMap(); const r=em[a.sapNr];
+  return r ? {sapNr:r.neuNr,ersetzt:true,hinweis:r.neuBez||r.hinweis||''} : {sapNr:a.sapNr,ersetzt:false,hinweis:''};
+}
+function getMenge(id) { return Number(ST.mengen[id]||0); }
+let _mengeTimer=null;
+function setMenge(id, val, immediate) {
+  const n=Math.max(0,Number(val)||0);
+  if(n===0) delete ST.mengen[id]; else ST.mengen[id]=n;
+  save(); updateHeader();
+  // Debounce full re-render to avoid destroying focused input
+  if(immediate) { renderPage(); return; }
+  clearTimeout(_mengeTimer);
+  _mengeTimer=setTimeout(()=>renderPage(), 600);
+}
+function bestellListe() {
+  return ST.artikel.filter(a=>getMenge(a.id)>0).map(a=>{
+    const e=getEff(a);
+    return {...a,effSap:e.sapNr,ersetzt:e.ersetzt,hinweis:e.hinweis,menge:getMenge(a.id)};
+  });
+}
+function buildXLSX() {
+  const l=bestellListe();
+  const wsData=[
+    ['SAP-Nummer','Artikelbezeichnung','Menge','Bereich','Hinweis']
+  ];
+  l.forEach(a=>wsData.push([
+    a.effSap,
+    a.bezeichnung,
+    a.menge,
+    a.bereich,
+    a.ersetzt?'ERSETZT: '+a.hinweis:''
+  ]));
+  const ws=XLSX.utils.aoa_to_sheet(wsData);
+  // Column widths
+  ws['!cols']=[{wch:14},{wch:50},{wch:8},{wch:22},{wch:40}];
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,'Bestellung',ws);
+  return wb;
+}
+// Keep CSV for clipboard copy
+function buildCSVText() {
+  const l=bestellListe();
+  const hdr='SAP-Nummer;Artikelbezeichnung;Menge;Bereich;Hinweis\n';
+  const rows=l.map(a=>`${a.effSap};"${a.bezeichnung}";${a.menge};"${a.bereich}";"${a.ersetzt?'ERSETZT: '+a.hinweis:''}"`).join('\n');
+  return '\uFEFF'+hdr+rows;
+}
+function bereiche() { return [...new Set(ST.artikel.map(a=>a.bereich))]; }
+
+// ── View ──────────────────────────────────────────────────────────────────────
+function setView(v) {
+  ST.view=v; ST.filter='Alle'; ST.suche='';
+  document.querySelectorAll('.nav-btn').forEach((b,i)=>{
+    b.classList.toggle('active',['bestellen','export','artikel','ersatz','settings'][i]===v);
+  });
+  renderPage();
+}
+function renderPage() {
+  const el=document.getElementById('page-content');
+  if(!el||el.closest('#app')?.classList.contains('hidden')) return;
+  updateHeader();
+  if(ST.view==='bestellen') el.innerHTML=renderBestellen();
+  if(ST.view==='export')    el.innerHTML=renderExport();
+  if(ST.view==='artikel')   el.innerHTML=renderArtikel();
+  if(ST.view==='ersatz')    el.innerHTML=renderErsatz();
+  if(ST.view==='settings')  el.innerHTML=renderSettings();
+}
+function render() { renderPage(); }
+function updateHeader() {
+  const _bl=bestellListe();
+  const pos=_bl.length;
+  const ers=_bl.filter(a=>a.ersetzt).length;
+  const hp=document.getElementById('hdr-pos');
+  const he=document.getElementById('hdr-ers');
+  const hn=document.getElementById('hdr-new-btn');
+  document.getElementById('hdr-total').textContent=ST.artikel.length+' Artikel';
+  hp.style.display=pos>0?'':'none'; hp.textContent=pos+' Position'+(pos!==1?'en':'');
+  he.style.display=ers>0?'':'none'; he.textContent='⚠ '+ers+' ersetzt';
+  hn.disabled=pos===0;
+}
+
+// ── Modal ─────────────────────────────────────────────────────────────────────
+function showModal(id) { document.getElementById(id).classList.remove('hidden'); }
+function hideModal(id) { document.getElementById(id).classList.add('hidden'); }
+
+// ── Neue Bestellung ───────────────────────────────────────────────────────────
+function confirmNeueBestellung() {
+  const n=Object.keys(ST.mengen).length;
+  document.getElementById('modal-reset-text').innerHTML=
+    `Alle <strong>${n} eingetragenen Positionen</strong> werden unwiderruflich gelöscht.<br>Stelle sicher, dass du die Bestellung bereits exportiert hast.`;
+  showModal('modal-reset');
+}
+function doNeueBestellung() {
+  ST.mengen={}; save(); hideModal('modal-reset');
+  setView('bestellen');
+}
+
+// ── BESTELLEN ─────────────────────────────────────────────────────────────────
+function renderBestellen() {
+  const em=ersatzMap();
+  const hatErsatzTreffer=Object.keys(em).some(k=>ST.artikel.find(a=>a.sapNr===k));
+  const brs=bereiche();
+  const q=ST.suche.toLowerCase().trim();
+
+  // ── Shared HTML blocks — declared FIRST so early returns can use them ──────
+  const pwAlt=ST.pwinfo&&ST.pwinfo.ts&&(Date.now()-ST.pwinfo.ts)>=30*86400000;
+  const warnHTML=
+    (hatErsatzTreffer?`<div class="card mb12" style="border-color:var(--orangebd);background:var(--orangel);color:var(--orange);font-size:12px">
+      ⚠ Einige Artikel wurden laut Produktwechsel-Datei ausgetauscht (orange markiert). Im Export wird die neue SAP-Nummer verwendet.
+    </div>`:'') +
+    (pwAlt?`<div class="card mb8" style="border-color:#fed7aa;background:#fff7ed;color:#c2410c;font-size:12px;display:flex;align-items:center;gap:8px">
+      <span style="font-size:16px">📅</span>
+      <span>Produktwechsel-Datei älter als 30 Tage — bitte aktualisieren (<a onclick="setView('ersatz')" href="#" style="color:#c2410c;font-weight:700">Ersatz-Tab</a>).</span>
+    </div>`:'');
+
+  const sucheHTML=`<div style="position:relative;margin-bottom:12px">
+    <span style="position:absolute;left:14px;top:50%;transform:translateY(-50%);font-size:16px;color:var(--faint);pointer-events:none">🔍</span>
+    <input id="bestellen-suche" class="inp" value="${esc(ST.suche)}"
+      placeholder="Bezeichnung oder SAP-Nummer suchen…"
+      style="padding-left:42px;font-size:14px"
+      oninput="setSuche(this.value)">
+    ${ST.suche?`<button onclick="setSuche('')" style="position:absolute;right:12px;top:50%;transform:translateY(-50%);background:none;border:none;font-size:20px;color:var(--faint);cursor:pointer;padding:6px;line-height:1;min-height:unset">✕</button>`:''}
+  </div>`;
+
+  const filterHTML=`<div class="flex mb12" style="flex-wrap:wrap">
+    ${['Alle',...brs].map(b=>`<button class="chip ${ST.filter===b?'on':''}" onclick="setFilter('${b.replace(/'/g,"\\'")}')">${esc(b)}</button>`).join('')}
+  </div>`;
+
+  // ── Filter articles ───────────────────────────────────────────────────────
+  const filtered=ST.artikel
+    .filter(a=>ST.filter==='Alle'||a.bereich===ST.filter)
+    .filter(a=>!q||(a.bezeichnung.toLowerCase().includes(q)||a.sapNr.toLowerCase().includes(q)||(em[a.sapNr]?.neuNr||'').includes(q)));
+
+  // ── Search results: flat list across all Bereiche ─────────────────────────
+  if(q&&ST.filter==='Alle'){
+    if(!filtered.length) return warnHTML+sucheHTML+filterHTML+
+      `<div class="card" style="text-align:center;color:var(--sub);padding:28px">Keine Artikel gefunden für „${esc(q)}".</div>`;
+    const rows=filtered.map((a,idx)=>{
+      const eff=getEff(a); const m=getMenge(a.id);
+      return `<div class="tbl-row ${eff.ersetzt?'ersetzt':idx%2===1?'alt':''}" style="grid-template-columns:1fr 115px 90px 140px">
+        <div>
+          <div style="font-size:13px;line-height:1.4">${esc(a.bezeichnung)}</div>
+          <div style="font-size:10px;color:var(--faint)">${esc(a.bereich)}</div>
+          ${eff.ersetzt?`<span class="pill pill-orange" style="margin-top:3px;display:inline-block">⚠ Ersetzt · ${esc(eff.hinweis)}</span>`:''}
+        </div>
+        <div>
+          <div class="sap ${eff.ersetzt?'sap-orange':'sap-blue'}">${esc(eff.sapNr)||'—'}</div>
+          ${eff.ersetzt?`<div style="font-size:10px;color:var(--faint);text-decoration:line-through">${esc(a.sapNr)}</div>`:''}
+        </div>
+        <div style="font-size:11px;color:var(--sub)">${esc(a.verpackung)||'—'}</div>
+        <div class="stepper">
+          <button class="step-btn" ${m===0?'disabled':''} onclick="setMenge(${a.id},${m-1},true)">−</button>
+          <input class="step-num ${m>0?'has':''}" type="number" min="0" value="${m||''}" placeholder="0"
+            onchange="setMenge(${a.id},this.value,true)" oninput="setMenge(${a.id},this.value)">
+          <button class="step-btn plus" onclick="setMenge(${a.id},${m+1},true)">+</button>
+        </div>
+      </div>`;
+    }).join('');
+    return warnHTML+sucheHTML+filterHTML+`
+      <div class="tbl-head" style="grid-template-columns:1fr 115px 90px 140px;border-radius:8px 8px 0 0">
+        <span>Artikel (${filtered.length} Treffer)</span><span>SAP-Nr.</span><span>Verpackung</span><span style="text-align:center">Menge</span>
+      </div>
+      <div class="tbl-body">${rows}</div>`;
+  }
+
+  // ── Normal view: grouped by Bereich ──────────────────────────────────────
+  const groups=(ST.filter==='Alle'?brs:[ST.filter]).map(bereich=>{
+    const art=filtered.filter(a=>a.bereich===bereich);
+    if(!art.length) return '';
+    const rows=art.map((a,idx)=>{
+      const eff=getEff(a); const m=getMenge(a.id);
+      return `<div class="tbl-row ${eff.ersetzt?'ersetzt':idx%2===1?'alt':''}" style="grid-template-columns:1fr 115px 90px 140px">
+        <div>
+          <div style="font-size:13px;line-height:1.4">${esc(a.bezeichnung)}</div>
+          ${eff.ersetzt?`<span class="pill pill-orange" style="margin-top:3px;display:inline-block">⚠ Ersetzt · ${esc(eff.hinweis)}</span>`:''}
+        </div>
+        <div>
+          <div class="sap ${eff.ersetzt?'sap-orange':'sap-blue'}">${esc(eff.sapNr)||'—'}</div>
+          ${eff.ersetzt?`<div style="font-size:10px;color:var(--faint);text-decoration:line-through">${esc(a.sapNr)}</div>`:''}
+        </div>
+        <div style="font-size:11px;color:var(--sub)">${esc(a.verpackung)||'—'}</div>
+        <div class="stepper">
+          <button class="step-btn" ${m===0?'disabled':''} onclick="setMenge(${a.id},${m-1},true)">−</button>
+          <input class="step-num ${m>0?'has':''}" type="number" min="0" value="${m||''}" placeholder="0"
+            onchange="setMenge(${a.id},this.value,true)" oninput="setMenge(${a.id},this.value)">
+          <button class="step-btn plus" onclick="setMenge(${a.id},${m+1},true)">+</button>
+        </div>
+      </div>`;
+    }).join('');
+    return `<div class="bereich-hdr">📁 ${esc(bereich)}</div>
+      <div class="tbl-head" style="grid-template-columns:1fr 115px 90px 140px;border-radius:0">
+        <span>Artikel</span><span>SAP-Nr.</span><span>Verpackung</span><span style="text-align:center">Menge</span>
+      </div>
+      <div class="tbl-body">${rows}</div>`;
+  }).join('');
+
+  return warnHTML+sucheHTML+filterHTML+groups;
+}
+function setFilter(b) { ST.filter=b; renderPage(); }
+function setSuche(q) {
+  ST.suche=q;
+  const inputEl=document.getElementById('bestellen-suche');
+  const cursorPos=inputEl?inputEl.selectionStart:q.length;
+  renderPage();
+  const newEl=document.getElementById('bestellen-suche');
+  if(newEl) { newEl.focus(); try{newEl.setSelectionRange(cursorPos,cursorPos);}catch(e){} }
+}
+
+// ── EXPORT ────────────────────────────────────────────────────────────────────
+function renderExport() {
+  const l=bestellListe();
+  const pos=l.length, ers=l.filter(a=>a.ersetzt).length;
+  const statsHTML=`<div class="stats">
+    <div class="stat" style="background:var(--bluel);border:1px solid #c7d7fe"><div class="stat-n" style="color:var(--blue)">${pos}</div><div class="stat-l" style="color:var(--blue)">Positionen</div></div>
+    <div class="stat" style="background:var(--orangel);border:1px solid var(--orangebd)"><div class="stat-n" style="color:var(--orange)">${ers}</div><div class="stat-l" style="color:var(--orange)">Davon ersetzt</div></div>
+    <div class="stat" style="background:var(--greenl);border:1px solid var(--greenbd)"><div class="stat-n" style="color:var(--green)">${pos-ers}</div><div class="stat-l" style="color:var(--green)">Unverändert</div></div>
+  </div>`;
+  if(!pos) return statsHTML+`<div class="card" style="text-align:center;color:var(--sub);padding:28px">Noch keine Mengen eingetragen.</div>`;
+  const rows=l.map((a,i)=>`<div class="tbl-row ${a.ersetzt?'ersetzt':i%2===1?'alt':''}" style="grid-template-columns:130px 1fr 55px 100px">
+    <div>
+      <div class="sap ${a.ersetzt?'sap-orange':'sap-blue'}">${esc(a.effSap)}</div>
+      ${a.ersetzt?`<div style="font-size:10px;color:var(--faint);text-decoration:line-through">${esc(a.sapNr)}</div>`:''}
+    </div>
+    <div style="font-size:12px">${esc(a.bezeichnung)}${a.ersetzt?` <span class="pill pill-orange">⚠</span>`:''}</div>
+    <div style="font-size:14px;font-weight:700">${a.menge}</div>
+    <div style="font-size:11px;color:var(--sub)">${esc(a.bereich)}</div>
+  </div>`).join('');
+  return statsHTML+`
+    <div class="tbl-head" style="grid-template-columns:130px 1fr 55px 100px;border-radius:8px 8px 0 0">
+      <span>SAP-Nr.</span><span>Bezeichnung</span><span>Menge</span><span>Bereich</span>
+    </div>
+    <div class="tbl-body mb16">${rows}</div>
+    <button class="btn btn-blue" onclick="openExportModal()">📤 Exportieren / per E-Mail senden</button>
+    <div class="text-xs mt8">Dateiname: Bestellung_JJJJMMTT_HHMM.xlsx · Excel-Format · CGM MUSE kompatibel</div>`;
+}
+function openExportModal() {
+  // Check EmailJS config
+  const ejs=ST.ejs;
+  const configured=ejs.serviceId&&ejs.templateId&&ejs.publicKey;
+  document.getElementById('email-not-configured').classList.toggle('hidden', configured);
+  document.getElementById('email-form-area').classList.toggle('hidden', !configured);
+  document.getElementById('email-setup-hint').textContent = configured
+    ? 'EmailJS ist konfiguriert. Du kannst die Bestellung direkt versenden.'
+    : '';
+  if(configured && ejs.emailTo) document.getElementById('email-to').value=ejs.emailTo;
+  if(configured && ejs.fromName) document.getElementById('email-from-name').value=ejs.fromName;
+  document.getElementById('dl-ok').style.display='none';
+  document.getElementById('email-status').textContent='';
+  showModal('modal-export');
+}
+
+// ── Download ──────────────────────────────────────────────────────────────────
+async function downloadCSV() {
+  const name=`Bestellung_${ts()}.xlsx`;
+  const wb=buildXLSX();
+  // Use SheetJS to write as xlsx blob
+  const wbout=XLSX.write(wb,{bookType:'xlsx',type:'array'});
+  const blob=new Blob([wbout],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+  if(window.showSaveFilePicker) {
+    try {
+      const h=await window.showSaveFilePicker({suggestedName:name,types:[{description:'Excel-Datei',accept:{'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet':['.xlsx']}}]});
+      const w=await h.createWritable(); await w.write(blob); await w.close();
+      document.getElementById('dl-ok').style.display='inline';
+      setTimeout(()=>document.getElementById('dl-ok').style.display='none',4000);
+      return;
+    } catch(e) { if(e.name==='AbortError') return; }
+  }
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a'); a.href=url; a.download=name;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  document.getElementById('dl-ok').style.display='inline';
+  setTimeout(()=>document.getElementById('dl-ok').style.display='none',4000);
+}
+function copyCSV() {
+  navigator.clipboard?.writeText(buildCSVText()).then(()=>{
+    const b=document.getElementById('copy-btn');
+    b.textContent='✓ Kopiert!'; b.style.background='var(--green)';
+    setTimeout(()=>{ b.textContent='📋 Kopieren'; b.style.background=''; },3000);
+  });
+}
+
+// ── EmailJS Send ──────────────────────────────────────────────────────────────
+async function sendEmail() {
+  const ejs=ST.ejs;
+  if(!ejs.serviceId||!ejs.templateId||!ejs.publicKey) { alert('EmailJS nicht konfiguriert.'); return; }
+  const to=document.getElementById('email-to').value.trim();
+  const fromName=document.getElementById('email-from-name').value.trim()||'HKL Team';
+  const msg=document.getElementById('email-msg').value.trim();
+  if(!to) { alert('Bitte Empfänger-E-Mail eingeben.'); return; }
+
+  const btn=document.getElementById('email-send-btn');
+  const status=document.getElementById('email-status');
+  btn.disabled=true; btn.textContent='Wird gesendet…'; status.textContent='';
+
+  // Build xlsx and encode as base64 for email attachment
+  const wb=buildXLSX();
+  const wbout=XLSX.write(wb,{bookType:'xlsx',type:'base64'});
+  const csvContent=buildCSVText(); // Also keep text version for email body
+  const liste=bestellListe();
+  const tabelleText=liste.map(a=>`${a.effSap} | ${a.bezeichnung} | Menge: ${a.menge}${a.ersetzt?' (ERSETZT)':''}`).join('\n');
+
+  const params = {
+    to_email:    to,
+    from_name:   fromName,
+    subject:     `Lagerbestellung HKL ${new Date().toLocaleDateString('de-DE')}`,
+    message:     msg || `Lagerbestellung vom ${new Date().toLocaleDateString('de-DE')}`,
+    bestellung:  tabelleText,
+    csv_content: csvContent,
+    xlsx_base64: wbout,
+    filename:    `Bestellung_${ts()}.xlsx`,
+    anzahl:      String(liste.length),
+    datum:       new Date().toLocaleDateString('de-DE'),
+  };
+
+  try {
+    // Load EmailJS SDK if not loaded
+    if(!window.emailjs) {
+      await new Promise((res,rej)=>{
+        const s=document.createElement('script');
+        s.src='https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js';
+        s.onload=res; s.onerror=rej; document.head.appendChild(s);
+      });
+    }
+    emailjs.init(ejs.publicKey);
+    await emailjs.send(ejs.serviceId, ejs.templateId, params);
+    status.textContent='✓ Gesendet!'; status.style.color='var(--green)';
+    btn.textContent='📧 E-Mail senden'; btn.disabled=false;
+    setTimeout(()=>{ status.textContent=''; },5000);
+  } catch(err) {
+    status.textContent='Fehler: '+(err.text||err.message||'Unbekannt');
+    status.style.color='var(--red)';
+    btn.textContent='📧 E-Mail senden'; btn.disabled=false;
+    console.error('EmailJS error:', err);
+  }
+}
+
+// ── ARTIKEL ───────────────────────────────────────────────────────────────────
+function renderArtikel() {
+  const brs=bereiche();
+  if(!ST.neuBereich) ST.neuBereich=brs[0]||'';
+  return `
+  <div class="card mb16">
+    <div style="font-size:14px;font-weight:700;margin-bottom:12px">➕ Artikel manuell hinzufügen</div>
+    <div class="grid2 mb8">
+      <div>
+        <div class="label">Bereich</div>
+        <select class="inp" id="neu-bereich" onchange="ST.neuBereich=this.value">
+          ${brs.map(b=>`<option ${b===ST.neuBereich?'selected':''}>${esc(b)}</option>`).join('')}
+          <option value="__neu__">— Neuer Bereich —</option>
+        </select>
+      </div>
+      <div>
+        <div class="label">SAP-Nr. (9 Stellen, Pflicht)</div>
+        <input class="inp" id="neu-sap" value="${esc(ST.neuSap)}" placeholder="z.B. 103044391" oninput="ST.neuSap=this.value">
+      </div>
+    </div>
+    <div class="grid2 mb12">
+      <div>
+        <div class="label">Artikelbezeichnung (Pflicht)</div>
+        <input class="inp" id="neu-bez" value="${esc(ST.neuBez)}" placeholder="z.B. Kompressen 10x10cm" oninput="ST.neuBez=this.value">
+      </div>
+      <div>
+        <div class="label">Verpackung (optional)</div>
+        <input class="inp" id="neu-vpk" value="${esc(ST.neuVpk)}" placeholder="z.B. 100 Stck." oninput="ST.neuVpk=this.value">
+      </div>
+    </div>
+    <div id="neu-err" style="font-size:12px;color:var(--red);margin-bottom:8px;display:none"></div>
+    <button class="btn btn-blue btn-sm" onclick="artikelHinzu()">＋ Hinzufügen</button>
+  </div>
+
+  <div class="card mb16">
+    <div style="font-size:14px;font-weight:700;margin-bottom:6px">📂 Aus Excel / CSV importieren</div>
+    <div class="text-sub mb12">Nur Zeilen mit 9-stelliger SAP-Nummer werden importiert. Duplikate werden erkannt.</div>
+    <label class="btn btn-gray btn-sm" style="display:inline-flex;align-items:center;gap:6px;cursor:pointer">
+      📁 Datei wählen
+      <input type="file" accept=".xlsx,.xls,.csv" style="display:none" onchange="parseArtikelDatei(event)">
+    </label>
+  </div>
+
+  <div style="font-size:11px;font-weight:700;color:var(--sub);margin-bottom:8px;text-transform:uppercase;letter-spacing:.06em">
+    Aktuelle Artikel (${ST.artikel.length})
+  </div>
+  <div class="tbl-head" style="grid-template-columns:1fr 110px 90px 44px;border-radius:8px 8px 0 0">
+    <span>Bezeichnung</span><span>SAP-Nr.</span><span>Bereich</span><span></span>
+  </div>
+  <div class="tbl-body" style="max-height:400px;overflow-y:auto">
+    ${ST.artikel.map((a,i)=>`
+      <div class="tbl-row ${i%2===1?'alt':''}" style="grid-template-columns:1fr 110px 90px 44px">
+        <div style="font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(a.bezeichnung)}</div>
+        <div class="sap sap-blue">${esc(a.sapNr)||'—'}</div>
+        <div style="font-size:10px;color:var(--sub);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(a.bereich)}</div>
+        <button onclick="delArtikel(${a.id})" style="width:44px;height:44px;border-radius:8px;border:1px solid var(--border);background:var(--redl);color:var(--red);cursor:pointer;font-size:16px;flex-shrink:0">✕</button>
+      </div>`).join('')}
+  </div>`;
+}
+function artikelHinzu() {
+  const bez=(document.getElementById('neu-bez')?.value||ST.neuBez).trim();
+  const sap=(document.getElementById('neu-sap')?.value||ST.neuSap).trim();
+  const vpk=(document.getElementById('neu-vpk')?.value||ST.neuVpk).trim();
+  const br =document.getElementById('neu-bereich')?.value||ST.neuBereich;
+  const errEl=document.getElementById('neu-err');
+  const show=msg=>{ errEl.textContent=msg; errEl.style.display=''; };
+  if(!bez) return show('Artikelbezeichnung fehlt.');
+  if(!ist9(sap)) return show('SAP-Nummer muss genau 9 Ziffern haben.');
+  if(ST.artikel.find(a=>a.sapNr===sap)) return show('Diese SAP-Nummer existiert bereits.');
+  ST.artikel.push({id:(typeof crypto!=='undefined'&&crypto.randomUUID)?crypto.randomUUID():Date.now()+'_'+Math.random().toString(36).slice(2),bereich:br,bezeichnung:bez,sapNr:sap,verpackung:vpk});
+  ST.neuBez=''; ST.neuSap=''; ST.neuVpk='';
+  save(); renderPage();
+}
+function delArtikel(id) {
+  ST.artikel=ST.artikel.filter(a=>a.id!==id);
+  // Auch gespeicherte Menge für diesen Artikel löschen
+  delete ST.mengen[id];
+  invalidateErsatzCache();
+  save(); renderPage();
+}
+function parseArtikelDatei(e) {
+  const file=e.target.files[0]; if(!file) return; e.target.value='';
+  const r=new FileReader(); r.onload=ev=>{
+    const wb=XLSX.read(new Uint8Array(ev.target.result),{type:'array'});
+    const ws=wb.Sheets[wb.SheetNames[0]];
+    const rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
+    const sapSet=new Set(ST.artikel.map(a=>a.sapNr));
+    const log=[];
+    rows.forEach((row,ri)=>{
+      const sap=row.map(c=>String(c).trim()).find(c=>ist9(c)); if(!sap) return;
+      const bez=row.map(c=>String(c).trim()).find(c=>c&&!ist9(c)&&c.length>2)||`Artikel ${ri+1}`;
+      const rest=row.map(c=>String(c).trim()).filter(c=>c&&c!==sap&&c!==bez&&c.length>1);
+      const dup=sapSet.has(sap);
+      const uid=(typeof crypto!=='undefined'&&crypto.randomUUID)?crypto.randomUUID():(Date.now()+'_'+ri+'_'+Math.random().toString(36).slice(2)); log.push({a:{id:uid,bereich:ST.neuBereich||bereiche()[0]||'',bezeichnung:bez,sapNr:sap,verpackung:rest.slice(0,2).join(' ')},dup,sel:!dup});
+    });
+    ST.artImportLog=log;
+    renderArtikelImportModal();
+    showModal('modal-artikel-import');
+  }; r.readAsArrayBuffer(file);
+}
+function renderArtikelImportModal() {
+  const log=ST.artImportLog||[];
+  document.getElementById('art-import-list').innerHTML=log.length?log.map((e,i)=>`
+    <div class="import-row" style="background:${e.dup?'var(--orangel)':e.sel?'var(--greenl)':'#fff'}">
+      <input type="checkbox" ${e.sel&&!e.dup?'checked':''} ${e.dup?'disabled':''} onchange="ST.artImportLog[${i}].sel=this.checked;renderArtikelImportModal()">
+      <div><div style="font-size:12px;font-weight:600">${esc(e.a.bezeichnung)}</div><div class="sap sap-blue">${esc(e.a.sapNr)}</div></div>
+      <div></div>
+      <span class="pill ${e.dup?'pill-orange':'pill-green'}">${e.dup?'Duplikat':'Neu'}</span>
+    </div>`).join(''):'<div style="padding:20px;text-align:center;color:var(--faint)">Keine passenden Einträge gefunden.</div>';
+  const n=log.filter(e=>e.sel&&!e.dup).length;
+  document.getElementById('art-import-confirm').textContent=`✓ ${n} Artikel hinzufügen`;
+}
+function artImportBestaetigen() {
+  const neu=(ST.artImportLog||[]).filter(e=>e.sel&&!e.dup).map(e=>e.a);
+  ST.artikel.push(...neu); save();
+  hideModal('modal-artikel-import'); renderPage();
+}
+
+// ── ERSATZ ────────────────────────────────────────────────────────────────────
+let _neueAlt='', _neueNeu='', _neueHinweis='';
+function renderErsatz() {
+  const exR=ST.ersatz.filter(r=>r.quelle==='excel');
+  const manR=ST.ersatz.filter(r=>r.quelle!=='excel');
+  const sapSet=new Set(ST.artikel.map(a=>a.sapNr));
+  const exTreffer=exR.filter(r=>sapSet.has(r.altNr));
+  const exOhne=exR.filter(r=>!sapSet.has(r.altNr));
+
+  const _pwAge=ST.pwinfo&&ST.pwinfo.ts?Math.floor((Date.now()-ST.pwinfo.ts)/86400000):0;
+  const _pwOld=_pwAge>=30;
+  const pwStatus=ST.pwinfo?
+    `<div style="background:${_pwOld?'var(--orangel)':'var(--greenl)'};border:1px solid ${_pwOld?'var(--orangebd)':'var(--greenbd)'};border-radius:8px;padding:10px 14px">
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+        <div style="font-size:20px">${_pwOld?'⚠️':'✅'}</div>
+        <div style="flex:1">
+          <div style="font-size:12px;font-weight:700;color:${_pwOld?'var(--orange)':'var(--green)'}">Importiert: ${esc(ST.pwinfo.dateiname)}</div>
+          <div class="text-xs">${ST.pwinfo.datum} · <strong>${ST.pwinfo.anzahl}</strong> Regeln · <strong style="color:var(--orange)">${ST.pwinfo.treffer}</strong> Treffer</div>
+        </div>
+        <button class="btn btn-red btn-sm" onclick="pwEntfernen()">Entfernen</button>
+      </div>
+      ${_pwOld?`<div style="margin-top:10px;padding:8px 12px;background:#fff7ed;border:1px solid var(--orangebd);border-radius:6px;font-size:12px;color:var(--orange);font-weight:600">⚠ Diese Datei wurde vor ${_pwAge} Tagen importiert. Bitte beim Einkauf eine aktualisierte Version anfordern.</div>`:''}
+    </div>`
+    :`<div style="background:#f8f9ff;border:1px solid var(--border);border-radius:8px;padding:10px 14px;font-size:12px;color:var(--faint);display:flex;align-items:center;gap:8px">
+      <span style="font-size:18px">📭</span> Noch keine Datei importiert.
+    </div>`;
+
+  function rRule(r,idx,isExcel) {
+    const match=ST.artikel.find(a=>a.sapNr===r.altNr);
+    return `<div style="background:#fff;border:1px solid var(--border);border-radius:8px;padding:10px 14px;margin-bottom:6px">
+      <div style="display:grid;grid-template-columns:110px 20px 110px 1fr auto;gap:8px;align-items:center">
+        <div><div class="text-xs mb4">ALT</div><div class="sap sap-orange">${esc(r.altNr)}</div>${r.altBez?`<div class="text-xs mt4">${esc(r.altBez)}</div>`:''}</div>
+        <div style="text-align:center;font-weight:700;font-size:18px;color:var(--sub)">→</div>
+        <div><div class="text-xs mb4">NEU</div><div class="sap sap-blue">${esc(r.neuNr)}</div>${r.neuBez?`<div class="text-xs mt4">${esc(r.neuBez)}</div>`:''}</div>
+        <div>${match?`<span style="font-size:12px;font-weight:600;color:var(--green)">✓ ${esc(match.bezeichnung)}</span>`:`<span style="font-size:12px;color:var(--faint);font-style:italic">Kein Treffer</span>`}
+          ${r.hinweis?`<div class="text-xs mt4">${esc(r.hinweis)}</div>`:''}
+          ${r.datum?`<div class="text-xs mt4">${r.datum}${r.ma?' · '+r.ma:''}</div>`:''}
+        </div>
+        ${!isExcel?`<button onclick="delErsatzByKey('${r.altNr}','${r.neuNr}')" class="btn btn-red btn-sm" style="padding:5px 9px">✕</button>`:`<div style="width:36px"></div>`}
+      </div>
+    </div>`;
+  }
+
+  return `
+  <!-- Upload Card -->
+  <div class="card mb16">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:10px">
+      <div>
+        <div style="font-size:14px;font-weight:700">📂 Produktwechsel-Datei (Einkauf)</div>
+        <div class="text-sub mt4">Lade die aktuelle Excel-Datei vom Einkauf hoch. Alle Umstellungen werden automatisch erkannt.</div>
+      </div>
+      <label class="btn btn-blue" style="cursor:pointer;display:inline-flex;align-items:center;gap:6px">
+        ⬆ Hochladen
+        <input type="file" accept=".xlsx,.xls" style="display:none" onchange="parsePwDatei(event)">
+      </label>
+    </div>
+    ${pwStatus}
+  </div>
+
+  <!-- Manuelle Regel -->
+  <div class="card mb16">
+    <div style="font-size:14px;font-weight:700;margin-bottom:4px">✏️ Manuelle Ersatzregel</div>
+    <div class="text-sub mb12">Für Ausnahmen die nicht in der Excel-Datei stehen.</div>
+    <div class="grid2 mb8">
+      <div><div class="label">Alte SAP-Nr.</div><input class="inp" id="e-alt" placeholder="z.B. 103028806" oninput="_neueAlt=this.value"></div>
+      <div><div class="label">Neue SAP-Nr.</div><input class="inp" id="e-neu" placeholder="z.B. 103053297" oninput="_neueNeu=this.value"></div>
+    </div>
+    <div class="mb12"><div class="label">Hinweis (optional)</div><input class="inp" id="e-hint" placeholder="z.B. Lieferant gewechselt" oninput="_neueHinweis=this.value"></div>
+    <div id="ersatz-err" style="font-size:12px;color:var(--red);margin-bottom:8px;display:none"></div>
+    <button class="btn btn-blue btn-sm" onclick="addManuellErsatz()">＋ Ersatzregel hinzufügen</button>
+  </div>
+
+  <!-- Aktive Treffer -->
+  ${exTreffer.length?`<div class="mb16">
+    <div style="font-size:11px;font-weight:700;color:var(--orange);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">
+      ⚠ Aktive Treffer aus Excel (${exTreffer.length}) — orange markiert beim Bestellen
+    </div>
+    ${exTreffer.map((r,i)=>rRule(r,i,true)).join('')}
+  </div>`:''}
+
+  <!-- Manuelle Regeln -->
+  ${manR.length?`<div class="mb16">
+    <div style="font-size:11px;font-weight:700;color:var(--blue);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">✏️ Manuelle Regeln (${manR.length})</div>
+    ${manR.map((r,i)=>rRule(r,i,false)).join('')}
+  </div>`:''}
+
+  <!-- Excel ohne Treffer -->
+  ${exOhne.length?`<details>
+    <summary style="font-size:11px;font-weight:700;color:var(--sub);cursor:pointer;padding:6px 0;user-select:none">
+      📄 Excel-Regeln ohne Treffer (${exOhne.length}) — aufklappen
+    </summary>
+    <div style="margin-top:8px">${exOhne.map((r,i)=>rRule(r,i,true)).join('')}</div>
+  </details>`:''}
+
+  ${ST.ersatz.length===0?`<div style="color:var(--faint);font-size:13px;padding:20px 0">Noch keine Regeln — lade die Produktwechsel-Datei hoch.</div>`:''}`;
+}
+
+function addManuellErsatz() {
+  const alt=(document.getElementById('e-alt')?.value||_neueAlt).trim();
+  const neu=(document.getElementById('e-neu')?.value||_neueNeu).trim();
+  const hint=(document.getElementById('e-hint')?.value||_neueHinweis).trim();
+  if(!alt||!neu) {
+    const errEl=document.getElementById('ersatz-err');
+    if(errEl){ errEl.textContent='Bitte beide SAP-Nummern eingeben.'; errEl.style.display=''; setTimeout(()=>errEl.style.display='none',3000); }
+    return;
+  }
+  if(ST.ersatz.find(r=>r.altNr===alt&&r.quelle!=='excel')) {
+    const errEl=document.getElementById('ersatz-err');
+    if(errEl){ errEl.textContent='Diese alte SAP-Nummer existiert bereits als manuelle Regel.'; errEl.style.display=''; setTimeout(()=>errEl.style.display='none',3000); }
+    return;
+  }
+  ST.ersatz.push({altNr:alt,neuNr:neu,hinweis:hint,quelle:'manuell'}); invalidateErsatzCache();
+  _neueAlt=''; _neueNeu=''; _neueHinweis='';
+  save(); renderPage();
+}
+function delErsatzByKey(altNr, neuNr) {
+  ST.ersatz=ST.ersatz.filter(r=>!(r.altNr===altNr&&r.neuNr===neuNr&&r.quelle!=='excel'));
+  invalidateErsatzCache(); save(); renderPage();
+}
+function pwEntfernen() {
+  if(!confirm('Excel-Regeln entfernen? Manuelle Regeln bleiben erhalten.')) return;
+  ST.ersatz=ST.ersatz.filter(r=>r.quelle!=='excel'); invalidateErsatzCache();
+  ST.pwinfo=null; save(); renderPage();
+}
+
+// Produktwechsel Excel einlesen
+function parsePwDatei(e) {
+  const file=e.target.files[0]; if(!file) return; e.target.value='';
+  const r=new FileReader(); r.onload=ev=>{
+    try {
+      const wb=XLSX.read(new Uint8Array(ev.target.result),{type:'array'});
+      const sn=wb.SheetNames.find(s=>s.toLowerCase().includes('umstellung'))||wb.SheetNames[0];
+      const ws=wb.Sheets[sn];
+      const rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
+      let hIdx=rows.findIndex(row=>row.some(c=>String(c).toLowerCase().replace(/[\n\r]/g,' ').includes('materialnummer')));
+      if(hIdx<0) hIdx=3;
+      const hdr=rows[hIdx].map(c=>String(c).trim().toLowerCase().replace(/[\n\r]+/g,' '));
+      const find=(...t)=>hdr.findIndex(h=>t.every(x=>h.includes(x)));
+      const cA=find('bisherige','material')>=0?find('bisherige','material'):1;
+      const cN=find('neue','material')>=0?find('neue','material'):4;
+      const cAB=find('bisherige','bezeichnung')>=0?find('bisherige','bezeichnung'):3;
+      const cNB=find('neue','bezeichnung')>=0?find('neue','bezeichnung'):6;
+      const cD=hdr.findIndex(h=>h.includes('datum'))>=0?hdr.findIndex(h=>h.includes('datum')):0;
+      const cM=find('einkauf')>=0?find('einkauf'):7;
+      const sapSet=new Set(ST.artikel.map(a=>a.sapNr));
+      const regeln=[];
+      for(let i=hIdx+1;i<rows.length;i++){
+        const row=rows[i];
+        const a=String(row[cA]||'').trim(), n=String(row[cN]||'').trim();
+        if(!a||!n||a===n) continue;
+        // Skip if either looks like a header/label (non-numeric chars dominate)
+        if(!/\d/.test(a)||!/\d/.test(n)) continue;
+        if(/[a-z]/i.test(a)&&a.length>12) continue;
+        regeln.push({altNr:a,neuNr:n,altBez:String(row[cAB]||'').trim().slice(0,80),neuBez:String(row[cNB]||'').trim().slice(0,80),datum:String(row[cD]||'').slice(0,10),ma:String(row[cM]||'').trim().slice(0,30),hinweis:String(row[cNB]||'').trim().slice(0,80),quelle:'excel'});
+      }
+      const treffer=regeln.filter(r=>sapSet.has(r.altNr));
+      ST.pwVorschau={dateiname:file.name,sheetName:sn,regeln,treffer};
+      showPwVorschau();
+    } catch(err) { alert('Fehler beim Lesen: '+err.message); }
+  }; r.readAsArrayBuffer(file);
+}
+function showPwVorschau() {
+  const v=ST.pwVorschau;
+  document.getElementById('pw-dateiname').textContent=v.dateiname+' · Sheet: '+v.sheetName;
+  document.getElementById('pw-stats').innerHTML=`
+    <div class="stat" style="background:var(--bluel);border:1px solid #c7d7fe"><div class="stat-n" style="color:var(--blue)">${v.regeln.length}</div><div class="stat-l" style="color:var(--blue)">Regeln gesamt</div></div>
+    <div class="stat" style="background:var(--orangel);border:1px solid var(--orangebd)"><div class="stat-n" style="color:var(--orange)">${v.treffer.length}</div><div class="stat-l" style="color:var(--orange)">Treffer in Bestellliste</div></div>
+    <div class="stat" style="background:var(--greenl);border:1px solid var(--greenbd)"><div class="stat-n" style="color:var(--green)">${v.regeln.length-v.treffer.length}</div><div class="stat-l" style="color:var(--green)">Kein Treffer</div></div>`;
+  const ta=document.getElementById('pw-treffer-area');
+  if(v.treffer.length>0){
+    ta.innerHTML=`<div style="font-size:11px;font-weight:700;color:var(--orange);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">⚠ Betroffene Artikel in deiner Bestellliste:</div>
+    <div class="import-list mb12">${v.treffer.map(r=>`
+      <div class="import-row">
+        <div class="sap sap-orange">${esc(r.altNr)}</div>
+        <div style="font-size:11px">${esc(r.altBez)}</div>
+        <div style="text-align:center;font-weight:700;color:var(--sub)">→</div>
+        <div><div class="sap sap-blue">${esc(r.neuNr)}</div><div style="font-size:10px;color:var(--sub)">${esc(r.neuBez)}</div></div>
+      </div>`).join('')}</div>`;
+  } else { ta.innerHTML=''; }
+  document.getElementById('pw-confirm-btn').textContent=`✓ ${v.regeln.length} Regeln übernehmen`;
+  showModal('modal-pw-vorschau');
+}
+function pwImportBestaetigen() {
+  const v=ST.pwVorschau; if(!v) return;
+  ST.ersatz=[...ST.ersatz.filter(r=>r.quelle!=='excel'),...v.regeln]; invalidateErsatzCache();
+  ST.pwinfo={dateiname:v.dateiname,datum:new Date().toLocaleString('de-DE'),ts:Date.now(),anzahl:v.regeln.length,treffer:v.treffer.length};
+  ST.pwVorschau=null; save(); hideModal('modal-pw-vorschau'); renderPage();
+}
+
+// ── SETTINGS ──────────────────────────────────────────────────────────────────
+function renderSettings() {
+  const ejs=ST.ejs;
+  return `
+  <div class="card mb16">
+    <div style="font-size:14px;font-weight:700;margin-bottom:4px">🔒 Passwort ändern</div>
+    <div class="text-sub mb12">Ändert das Anmelde-Passwort für alle Nutzer.</div>
+    <div class="grid2 mb8">
+      <div><div class="label">Neues Passwort</div><input class="inp" id="new-pw1" type="password" placeholder="Neues Passwort"></div>
+      <div><div class="label">Wiederholen</div><input class="inp" id="new-pw2" type="password" placeholder="Wiederholen"></div>
+    </div>
+    <div id="pw-err" style="font-size:12px;color:var(--red);margin-bottom:8px;display:none"></div>
+    <button class="btn btn-blue btn-sm" onclick="changePw()">Passwort speichern</button>
+  </div>
+
+  <div class="card mb16">
+    <div style="font-size:14px;font-weight:700;margin-bottom:4px">📧 E-Mail Einstellungen (EmailJS)</div>
+    <div class="text-sub mb12">Einmalige Einrichtung für den E-Mail-Versand. <a href="https://www.emailjs.com" target="_blank" style="color:var(--blue)">emailjs.com</a> kostenlos registrieren, dann diese Daten eintragen.</div>
+    <div class="setting-row">
+      <div><div style="font-size:13px;font-weight:600">Service ID</div><div class="text-xs">Unter EmailJS → Email Services</div></div>
+      <input class="inp" id="ejs-service" value="${esc(ejs.serviceId)}" placeholder="service_xxxxxxx" oninput="ST.ejs.serviceId=this.value">
+    </div>
+    <div class="setting-row">
+      <div><div style="font-size:13px;font-weight:600">Template ID</div><div class="text-xs">Unter EmailJS → Email Templates</div></div>
+      <input class="inp" id="ejs-template" value="${esc(ejs.templateId)}" placeholder="template_xxxxxxx" oninput="ST.ejs.templateId=this.value">
+    </div>
+    <div class="setting-row">
+      <div><div style="font-size:13px;font-weight:600">Public Key</div><div class="text-xs">Unter EmailJS → Account → API Keys</div></div>
+      <input class="inp" id="ejs-pubkey" value="${esc(ejs.publicKey)}" placeholder="xxxxxxxxxxxxxxxxxxx" oninput="ST.ejs.publicKey=this.value">
+    </div>
+    <div class="setting-row">
+      <div><div style="font-size:13px;font-weight:600">Standard-Empfänger</div><div class="text-xs">Vorausgefüllt beim E-Mail-Versand</div></div>
+      <input class="inp" id="ejs-to" type="email" value="${esc(ejs.emailTo)}" placeholder="einkauf@klinik.de" oninput="ST.ejs.emailTo=this.value">
+    </div>
+    <div class="setting-row" style="border:none">
+      <div><div style="font-size:13px;font-weight:600">Standard Absender-Name</div><div class="text-xs">Erscheint in der E-Mail</div></div>
+      <input class="inp" id="ejs-name" value="${esc(ejs.fromName)}" placeholder="HKL Team" oninput="ST.ejs.fromName=this.value">
+    </div>
+    <div id="ejs-saved" style="font-size:12px;color:var(--green);margin-bottom:8px;display:none">✓ Gespeichert!</div>
+    <button class="btn btn-blue btn-sm" onclick="saveEjs()">Einstellungen speichern</button>
+  </div>
+
+  <div class="card">
+    <div style="font-size:14px;font-weight:700;margin-bottom:12px">ℹ️ EmailJS Template-Variablen</div>
+    <div class="text-sub mb8">Verwende diese Variablen in deinem EmailJS-Template:</div>
+    ${[['{{to_email}}','Empfänger-Adresse'],['{{from_name}}','Absender-Name'],['{{subject}}','Betreff (automatisch)'],['{{message}}','Persönliche Nachricht'],['{{bestellung}}','Bestellliste als Text'],['{{anzahl}}','Anzahl Positionen'],['{{datum}}','Datum der Bestellung'],['{{csv_content}}','Bestellliste als Text (für E-Mail-Body)'],['{{xlsx_base64}}','Excel-Datei als Base64 (für Anhang)'],['{{filename}}','Dateiname der Excel-Datei']].map(([v,d])=>`
+      <div style="display:flex;gap:12px;padding:5px 0;border-bottom:1px solid var(--border);font-size:12px">
+        <code style="background:#f0f2f8;padding:2px 6px;border-radius:4px;color:var(--blue);min-width:140px">${v}</code>
+        <span style="color:var(--sub)">${d}</span>
+      </div>`).join('')}
+  </div>`;
+}
+function changePw() {
+  const p1=document.getElementById('new-pw1').value;
+  const p2=document.getElementById('new-pw2').value;
+  const e=document.getElementById('pw-err');
+  if(!p1||p1.length<4) { e.textContent='Mindestens 4 Zeichen.'; e.style.display=''; return; }
+  if(p1!==p2) { e.textContent='Passwörter stimmen nicht überein.'; e.style.display=''; return; }
+  sv(LS.pw, hashPw(p1)); e.style.display='none';
+  document.getElementById('new-pw1').value=''; document.getElementById('new-pw2').value='';
+  alert('✓ Passwort gespeichert.');
+}
+function saveEjs() {
+  save();
+  const el=document.getElementById('ejs-saved');
+  el.style.display=''; setTimeout(()=>el.style.display='none',3000);
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+checkSession();
+document.getElementById('lock-pw').focus();
+</script>
+</body>
+</html>
