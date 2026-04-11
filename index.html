@@ -119,7 +119,6 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#f4f6fb;color:#11182
     <div class="lock-err" id="lock-err"></div>
     <input class="lock-input" type="password" id="lock-pw" placeholder="••••••" onkeydown="if(event.key==='Enter')tryUnlock()">
     <button class="lock-btn" onclick="tryUnlock()">Anmelden</button>
-    <div style="font-size:11px;color:#9ca3af;margin-top:16px">Standard-Passwort: <strong>HKL2024</strong><br>Änderbar unter ⚙ Einstellungen</div>
   </div>
 </div>
 
@@ -429,7 +428,7 @@ const LS = {
   pwinfo:  'hkl_pwinfo_v4',
   ejs:     'hkl_emailjs_v4',
 };
-const APP_PW_DEFAULT = 'HKL2024';
+const APP_PW_DEFAULT = 'kath8517';
 
 function ls(key, fb) { try { const v=localStorage.getItem(key); return v?JSON.parse(v):fb; } catch { return fb; } }
 function sv(key, val) { try { localStorage.setItem(key, JSON.stringify(val)); } catch {} }
