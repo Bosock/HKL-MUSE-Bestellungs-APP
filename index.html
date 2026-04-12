@@ -5,6 +5,20 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>⚕ Lager-Bestellsystem · HKL</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script>
+// CDN-Fehler abfangen — wichtig in Klinik-Netzwerken die externe CDNs blockieren
+window.addEventListener('load', function() {
+  if (typeof XLSX === 'undefined') {
+    document.body.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;min-height:100vh;padding:20px;font-family:system-ui">' +
+      '<div style="background:#fff;border-radius:12px;padding:28px;max-width:400px;text-align:center;box-shadow:0 4px 20px rgba(0,0,0,.15)">' +
+      '<div style="font-size:40px;margin-bottom:12px">⚠️</div>' +
+      '<div style="font-size:16px;font-weight:700;margin-bottom:8px">Excel-Bibliothek nicht geladen</div>' +
+      '<div style="font-size:13px;color:#6b7280;line-height:1.5">Die App benötigt eine Verbindung zum Internet (cdnjs.cloudflare.com).<br><br>' +
+      'Im Klinik-Netzwerk: Bitte prüfen ob externe Adressen erlaubt sind, oder die App über WLAN/Mobilfunk öffnen.</div>' +
+      '</div></div>';
+  }
+});
+</script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:'Segoe UI',system-ui,sans-serif;background:#f4f6fb;color:#111827;min-height:100vh}
@@ -152,7 +166,7 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#f4f6fb;color:#11182
 </div>
 
 <!-- MODALS -->
-<div class="modal-bg hidden" id="modal-reset">
+<div class="modal-bg hidden" onclick="if(event.target===this)hideModal(this.id)" id="modal-reset">
   <div class="modal">
     <div style="font-size:22px;margin-bottom:8px">🗑️</div>
     <div style="font-size:16px;font-weight:700;margin-bottom:8px">Neue Bestellung anlegen?</div>
@@ -164,7 +178,7 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#f4f6fb;color:#11182
   </div>
 </div>
 
-<div class="modal-bg hidden" id="modal-export">
+<div class="modal-bg hidden" onclick="if(event.target===this)hideModal(this.id)" id="modal-export">
   <div class="modal">
     <div style="font-size:16px;font-weight:700;margin-bottom:4px">📤 Bestellung exportieren</div>
     <div class="text-sub mb16">Wähle wie du die Excel-Datei weitergeben möchtest:</div>
@@ -191,7 +205,7 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#f4f6fb;color:#11182
         Speichert die Excel-Datei direkt auf das Gerät.
         <strong>Empfohlen für PC</strong> — danach direkt in CGM MUSE hochladen.
       </div>
-      <button class="btn btn-blue btn-sm" onclick="downloadCSV()">⬇ Als Excel (.xlsx) herunterladen</button>
+      <button class="btn btn-blue btn-sm" onclick="downloadXLSX()">⬇ Als Excel (.xlsx) herunterladen</button>
       <span id="dl-ok" style="font-size:12px;color:var(--green);margin-left:10px;display:none">✓ Gespeichert!</span>
     </div>
 
@@ -208,7 +222,7 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#f4f6fb;color:#11182
   </div>
 </div>
 
-<div class="modal-bg hidden" id="modal-pw-vorschau">
+<div class="modal-bg hidden" onclick="if(event.target===this)hideModal(this.id)" id="modal-pw-vorschau">
   <div class="modal">
     <div style="font-size:16px;font-weight:700;margin-bottom:6px">📋 Produktwechsel-Import Vorschau</div>
     <div class="text-xs mb12" id="pw-dateiname"></div>
@@ -224,7 +238,7 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#f4f6fb;color:#11182
   </div>
 </div>
 
-<div class="modal-bg hidden" id="modal-artikel-import">
+<div class="modal-bg hidden" onclick="if(event.target===this)hideModal(this.id)" id="modal-artikel-import">
   <div class="modal">
     <div style="font-size:16px;font-weight:700;margin-bottom:6px">📂 Artikel Import Vorschau</div>
     <div class="import-list mb12" id="art-import-list"></div>
@@ -538,7 +552,7 @@ function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;'
 let _ersatzMapCache=null;
 let _ersatzMapKey='';
 function ersatzMap() {
-  const key=ST.ersatz.length+'_'+ST.ersatz.map(e=>e.altNr).join(',');
+  const key=ST.ersatz.length+'_'+ST.ersatz.map(e=>e.altNr+'→'+(e.neuNr||'')).join(',');
   if(_ersatzMapKey===key && _ersatzMapCache) return _ersatzMapCache;
   const m={};
   ST.ersatz.forEach(e=>{ if(e.altNr&&e.neuNr) m[e.altNr.trim()]=e; });
@@ -563,38 +577,59 @@ function setMenge(id, val, immediate) {
   _mengeTimer=setTimeout(()=>renderPage(), 600);
 }
 function bestellListe() {
-  return ST.artikel.filter(a=>getMenge(a.id)>0).map(a=>{
+  const result=[];
+  for(const a of ST.artikel){
+    const m=getMenge(a.id);     // Einmal lesen, nicht zweimal
+    if(m===0) continue;
     const e=getEff(a);
-    return {...a,effSap:e.sapNr,ersetzt:e.ersetzt,hinweis:e.hinweis,menge:getMenge(a.id)};
-  });
+    result.push({...a,effSap:e.sapNr,ersetzt:e.ersetzt,hinweis:e.hinweis,menge:m});
+  }
+  return result;
 }
 function buildXLSX() {
-  const l=bestellListe();
-  const wsData=[
-    ['SAP-Nummer','Artikelbezeichnung','Menge','Bereich','Hinweis']
+  const l = bestellListe();
+  // Datenzeilen aufbauen — alle Werte explizit als String oder Number
+  const wsData = [
+    ['SAP-Nummer', 'Artikelbezeichnung', 'Menge', 'Bereich', 'Hinweis']
   ];
-  l.forEach(a=>wsData.push([
-    a.effSap,
-    a.bezeichnung,
-    Number(a.menge), // Als Zahl, nicht Text
-    a.bereich,
-    a.ersetzt?'ERSETZT: '+a.hinweis:''
+  l.forEach(a => wsData.push([
+    String(a.effSap  || ''),
+    String(a.bezeichnung || ''),
+    Number(a.menge),
+    String(a.bereich || ''),
+    a.ersetzt ? 'ERSETZT: ' + String(a.hinweis || '') : ''
   ]));
-  const ws=XLSX.utils.aoa_to_sheet(wsData);
-  // Spaltenbreiten
-  ws['!cols']=[{wch:14},{wch:50},{wch:8},{wch:22},{wch:40}];
-
-  // Erste Zeile einfrieren — korrekte SheetJS API
-  ws['!sheetViews']=[{state:'frozen',ySplit:1,topLeftCell:'A2'}];
-  const wb=XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb,'Bestellung',ws);
+  const ws = XLSX.utils.aoa_to_sheet(wsData);
+  ws['!cols'] = [{wch:14},{wch:50},{wch:8},{wch:22},{wch:40}];
+  const wb = XLSX.utils.book_new();
+  // KORREKTE Reihenfolge: book_append_sheet(workbook, worksheet, sheetName)
+  XLSX.utils.book_append_sheet(wb, ws, 'Bestellung');
   return wb;
 }
+
+// Baut den XLSX-Blob — zentrale Funktion für alle Export-Pfade
+function buildXLSXBlob() {
+  const wb    = buildXLSX();
+  const wbout = XLSX.write(wb, {bookType:'xlsx', type:'array'});
+  return new Blob([wbout], {
+    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+  });
+}
+
+
 // Keep CSV for clipboard copy
 function buildCSVText() {
   const l=bestellListe();
+  // RFC 4180: Anführungszeichen in Feldern müssen als "" verdoppelt werden
+  const csvQ = s => '"' + String(s||'').replace(/"/g,'""') + '"';
   const hdr='SAP-Nummer;Artikelbezeichnung;Menge;Bereich;Hinweis\n';
-  const rows=l.map(a=>`${a.effSap};"${a.bezeichnung}";${a.menge};"${a.bereich}";"${a.ersetzt?'ERSETZT: '+a.hinweis:''}"`).join('\n');
+  const rows=l.map(a=>[
+    a.effSap,
+    csvQ(a.bezeichnung),
+    a.menge,
+    csvQ(a.bereich),
+    csvQ(a.ersetzt?'ERSETZT: '+a.hinweis:'')
+  ].join(';')).join('\n');
   return '\uFEFF'+hdr+rows;
 }
 let _bereicheCache=null;
@@ -807,82 +842,169 @@ function openExportModal() {
 }
 
 
-// ── Teilen via Web Share API (Handy-nativ) ────────────────────────────────────
+// ── Teilen / Speichern ───────────────────────────────────────────────────────
 async function teileXLSX() {
-  const name  = dateiname();
-  const liste = bestellListe(); // Einmal cachen — wird mehrfach verwendet
-  const datum = new Date().toLocaleDateString('de-DE');
+  const btn   = document.getElementById('share-btn');
+  const msgEl = document.getElementById('share-not-supported');
 
-  // XLSX aufbauen
-  const wb    = buildXLSX();
-  const wbout = XLSX.write(wb, {bookType:'xlsx', type:'array'});
-  const blob  = new Blob([wbout], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
-  const file  = new File([blob], name, {type: blob.type});
+  const setBtn = (txt, disabled) => {
+    if (btn) { btn.textContent = txt; btn.disabled = !!disabled; }
+  };
+  const showOk = () => {
+    const el = document.getElementById('share-ok');
+    if (el) { el.style.display='inline'; setTimeout(()=>el.style.display='none', 4000); }
+  };
+  const showMsg = (html, color) => {
+    if (!msgEl) return;
+    msgEl.style.display = 'block';
+    msgEl.style.color   = color || 'var(--green)';
+    msgEl.innerHTML     = html;
+  };
+  const clearMsg = () => { if(msgEl) msgEl.style.display='none'; };
 
-  // Hilfsfunktion: sicherer Zugriff auf Modal-Elemente (könnten nach await null sein)
-  const showEl = (id, val) => { const el=document.getElementById(id); if(el) el.style.display=val; };
-  const hideElAfter = (id, ms) => setTimeout(()=>showEl(id,'none'), ms);
+  setBtn('⏳ Wird erstellt…', true);
+  clearMsg();
 
-  // Web Share API Level 2 — Datei-Anhänge (iOS Safari 15+, Android Chrome 75+)
-  if (navigator.canShare && navigator.canShare({files:[file]})) {
-    try {
-      await navigator.share({
-        title: `Lagerbestellung HKL ${datum}`,
-        text:  `Lagerbestellung vom ${datum} · ${liste.length} Positionen`,
-        files: [file],
-      });
-      showEl('share-ok','inline');
-      hideElAfter('share-ok', 4000);
-    } catch(e) {
-      if (e.name !== 'AbortError') {
-        showEl('share-not-supported','block');
+  // ── XLSX erstellen ──────────────────────────────────────────────────────────
+  let blob;
+  try {
+    blob = buildXLSXBlob();
+  } catch (err) {
+    setBtn('📲 Datei teilen', false);
+    showMsg('⚠ Fehler beim Erstellen der Datei: ' + (err.message || err), 'var(--red)');
+    return;
+  }
+
+  const name    = dateiname();
+  const datum   = new Date().toLocaleDateString('de-DE');
+  const anzahl  = bestellListe().length;
+  const isIOS   = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+  const file    = new File([blob], name, {type: blob.type});
+  const blobUrl = URL.createObjectURL(blob);
+
+  // Aufräumen nach 60 Sekunden
+  setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
+
+  // ── [1] Datei-Teilen (iOS 15+ / Android Chrome 89+) ────────────────────────
+  if (navigator.canShare) {
+    let canShare = false;
+    try { canShare = navigator.canShare({files: [file]}); } catch(e) {}
+    if (canShare) {
+      try {
+        await navigator.share({
+          title: 'Lagerbestellung HKL ' + datum,
+          text:  anzahl + ' Positionen · ' + datum,
+          files: [file],
+        });
+        setBtn('📲 Datei teilen', false);
+        showOk();
+        return;
+      } catch(e) {
+        if (e.name === 'AbortError') { setBtn('📲 Datei teilen', false); return; }
+        // Weiter zu Fallback
       }
     }
-  } else if (navigator.share) {
-    // Share API vorhanden aber ohne Datei-Unterstützung → als Text teilen
-    try {
-      const text = liste.map(a=>`${a.effSap} | ${a.bezeichnung} | ${a.menge}x`).join('\n');
-      await navigator.share({
-        title: `Lagerbestellung HKL ${datum}`,
-        text:  `Lagerbestellung ${datum}:\n\n${text}`,
-      });
-      showEl('share-ok','inline');
-      hideElAfter('share-ok', 4000);
-    } catch(e) { /* Nutzer hat abgebrochen — kein Fehler */ }
-  } else {
-    // Kein Share API (z.B. Desktop-Browser) → Hinweis anzeigen
-    showEl('share-not-supported','block');
   }
+
+  // ── [2] iOS ohne canShare: URL teilen ──────────────────────────────────────
+  if (isIOS && navigator.share) {
+    try {
+      await navigator.share({
+        title: 'Lagerbestellung HKL ' + datum,
+        text:  anzahl + ' Positionen · ' + datum,
+        url:   blobUrl,
+      });
+      setBtn('📲 Datei teilen', false);
+      showOk();
+      return;
+    } catch(e) {
+      if (e.name === 'AbortError') { setBtn('📲 Datei teilen', false); return; }
+    }
+  }
+
+  // ── [3] iOS Fallback: Quick Look ────────────────────────────────────────────
+  if (isIOS) {
+    window.open(blobUrl, '_blank');
+    setBtn('📲 Datei teilen', false);
+    showMsg(
+      '📂 <strong>Datei geöffnet</strong> — tippe oben auf <strong>↑ Teilen</strong> ' +
+      'um sie per E-Mail, AirDrop oder WhatsApp zu senden.'
+    );
+    return;
+  }
+
+  // ── [4] Android / PC: Direkter Download ────────────────────────────────────
+  const a = document.createElement('a');
+  a.href = blobUrl; a.download = name;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setBtn('📲 Datei teilen', false);
+  showMsg(
+    '✓ <strong>Datei heruntergeladen</strong> (' + name + ')<br>' +
+    '<span style="font-size:11px">Öffne Downloads → teile per WhatsApp, E-Mail oder Teams.</span>'
+  );
 }
 
-// ── Download ──────────────────────────────────────────────────────────────────
-async function downloadCSV() {
-  const name   = dateiname();
-  const wb     = buildXLSX();
-  const wbout  = XLSX.write(wb,{bookType:'xlsx',type:'array'});
-  const blob   = new Blob([wbout],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
-  // Null-safe Feedback-Helfer (Modal könnte inzwischen geschlossen sein)
-  const showDlOk = () => {
-    const el=document.getElementById('dl-ok');
-    if(el){ el.style.display='inline'; setTimeout(()=>el.style.display='none',4000); }
+
+// ── Download ─────────────────────────────────────────────────────────────────
+async function downloadXLSX() {
+  const name  = dateiname();
+  const okEl  = document.getElementById('dl-ok');
+
+  const showOk = () => {
+    if (!okEl) return;
+    okEl.textContent = '✓ Gespeichert!';
+    okEl.style.color = 'var(--green)';
+    okEl.style.display = 'inline';
+    setTimeout(() => okEl.style.display = 'none', 4000);
   };
-  if(window.showSaveFilePicker) {
-    try {
-      const h=await window.showSaveFilePicker({
-        suggestedName:name,
-        types:[{description:'Excel-Datei',accept:{'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet':['.xlsx']}}]
-      });
-      const w=await h.createWritable(); await w.write(blob); await w.close();
-      showDlOk(); return;
-    } catch(e) { if(e.name==='AbortError') return; }
+  const showErr = (msg) => {
+    if (!okEl) return;
+    okEl.textContent = '⚠ ' + msg;
+    okEl.style.color = 'var(--red)';
+    okEl.style.display = 'inline';
+    setTimeout(() => { okEl.style.display = 'none'; okEl.style.color = ''; }, 5000);
+  };
+
+  let blob;
+  try {
+    blob = buildXLSXBlob();
+  } catch(err) {
+    showErr('Fehler: ' + (err.message || err));
+    return;
   }
-  // Fallback: unsichtbarer Link
-  const url=URL.createObjectURL(blob);
-  const a=document.createElement('a'); a.href=url; a.download=name;
-  document.body.appendChild(a); a.click(); document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-  showDlOk();
+
+  // Moderner File-Picker (Chrome/Edge Desktop)
+  if (window.showSaveFilePicker) {
+    try {
+      const h = await window.showSaveFilePicker({
+        suggestedName: name,
+        types: [{
+          description: 'Excel-Datei',
+          accept: {'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx']}
+        }]
+      });
+      const w = await h.createWritable();
+      await w.write(blob);
+      await w.close();
+      showOk();
+      return;
+    } catch(e) {
+      if (e.name === 'AbortError') return; // Nutzer hat abgebrochen
+      // Fehler → Fallback
+    }
+  }
+
+  // Fallback: unsichtbarer Link (funktioniert überall)
+  const url = URL.createObjectURL(blob);
+  const a   = document.createElement('a');
+  a.href = url; a.download = name;
+  document.body.appendChild(a); a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
+  showOk();
 }
+
+
 function copyCSV() {
   const setBtn = (txt, bg) => {
     const b=document.getElementById('copy-btn');
@@ -1250,7 +1372,9 @@ function changePw() {
   if(p1!==p2) { e.textContent='Passwörter stimmen nicht überein.'; e.style.display=''; return; }
   sv(LS.pw, hashPw(p1)); e.style.display='none';
   document.getElementById('new-pw1').value=''; document.getElementById('new-pw2').value='';
-  alert('✓ Passwort gespeichert.');
+  // Inline-Feedback statt alert()
+  e.textContent='✓ Passwort gespeichert!'; e.style.color='var(--green)'; e.style.display='';
+  setTimeout(()=>{ e.style.display='none'; e.style.color='var(--red)'; },3000);
 }
 
 // ── Init ──────────────────────────────────────────────────────────────────────
