@@ -189,7 +189,7 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#f4f6fb;color:#11182
       <div class="text-xs mb10" style="line-height:1.6">
         Öffnet das Teilen-Menü deines Handys. Du kannst die Excel-Datei direkt über
         WhatsApp, deine Mail-App, Teams oder jeden anderen Dienst weiterleiten.
-        <strong>Empfohlen für Handy.</strong>
+        <strong>Empfohlen für Handy.</strong> Falls kein Teilen-Menü erscheint, nutze „Herunterladen".
       </div>
       <button class="btn btn-green btn-sm" id="share-btn" onclick="teileXLSX()">📲 Datei teilen</button>
       <span id="share-ok" style="font-size:12px;color:var(--green);margin-left:10px;display:none">✓ Geteilt!</span>
@@ -198,14 +198,19 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#f4f6fb;color:#11182
       </div>
     </div>
 
-    <!-- OPTION 2: Download (PC) -->
-    <div class="card mb8" style="border-color:#a5b4fc">
+    <!-- OPTION 2: Download — direkter Link, funktioniert in JEDEM Browser -->
+    <div class="card mb8" id="dl-card" style="border-color:#a5b4fc">
       <div style="font-size:13px;font-weight:700;color:var(--blue);margin-bottom:4px">💾 Herunterladen</div>
       <div class="text-xs mb10" style="line-height:1.6">
         Speichert die Excel-Datei direkt auf das Gerät.
-        <strong>Empfohlen für PC</strong> — danach direkt in CGM MUSE hochladen.
+        <strong>Für alle Browser</strong> — danach direkt in CGM MUSE hochladen.
       </div>
-      <button class="btn btn-blue btn-sm" onclick="downloadXLSX()">⬇ Als Excel (.xlsx) herunterladen</button>
+      <!-- Direkter Link: kein JavaScript-API nötig, funktioniert auch in DDG/Firefox -->
+      <a id="dl-direct-link" class="btn btn-blue btn-sm"
+         style="display:none;text-decoration:none;align-items:center"
+         href="#" download="">⬇ Datei herunterladen</a>
+      <!-- Fallback-Button für den Fall dass Link noch nicht bereit -->
+      <button id="dl-btn" class="btn btn-blue btn-sm" onclick="downloadXLSX()">⬇ Als Excel (.xlsx) herunterladen</button>
       <span id="dl-ok" style="font-size:12px;color:var(--green);margin-left:10px;display:none">✓ Gespeichert!</span>
     </div>
 
@@ -831,14 +836,61 @@ function renderExport() {
     <button class="btn btn-blue" onclick="openExportModal()">📤 Exportieren / Teilen</button>
     <div class="text-xs mt8">Dateiname: Bestellung_JJ.MM.DD.xlsx · Excel-Format · CGM MUSE kompatibel</div>`;
 }
+// Aktuell aktive Blob-URL des Export-Modals (für Cleanup)
+let _exportBlobUrl = null;
+
 function openExportModal() {
-  // Alle Status-Elemente sauber zurücksetzen
+  // Alte Blob-URL aufräumen
+  if(_exportBlobUrl){ URL.revokeObjectURL(_exportBlobUrl); _exportBlobUrl=null; }
+
+  // Status-Elemente zurücksetzen
   ['dl-ok','share-ok','share-not-supported'].forEach(id=>{
     const el=document.getElementById(id); if(el) el.style.display='none';
   });
   const cb=document.getElementById('copy-btn');
   if(cb){ cb.textContent='📋 In Zwischenablage kopieren'; cb.style.background=''; }
+
+  // XLSX jetzt sofort bauen — vor dem Öffnen des Modals
+  try {
+    const blob   = buildXLSXBlob();
+    const name   = dateiname();
+    _exportBlobUrl = URL.createObjectURL(blob);
+
+    // Echten Download-Link setzen — funktioniert in JEDEM Browser
+    const dlLink = document.getElementById('dl-direct-link');
+    if(dlLink){
+      dlLink.href     = _exportBlobUrl;
+      dlLink.download = name;
+      dlLink.textContent = '⬇ ' + name + ' herunterladen';
+      dlLink.style.display = 'inline-flex';
+    }
+    // Download-Button ausblenden (Link übernimmt)
+    const dlBtn = document.getElementById('dl-btn');
+    if(dlBtn) dlBtn.style.display = 'none';
+
+    // Teilen-Button mit vorgebautem File befüllen
+    const shareBtn = document.getElementById('share-btn');
+    if(shareBtn){
+      shareBtn.dataset.blobUrl = _exportBlobUrl;
+      shareBtn.dataset.name    = name;
+    }
+
+  } catch(err) {
+    // XLSX-Bau fehlgeschlagen — Fehlermeldung im Modal
+    const dlCard = document.getElementById('dl-card');
+    if(dlCard) dlCard.innerHTML += '<div style="color:var(--red);font-size:12px;margin-top:8px">⚠ Fehler: '+err.message+'</div>';
+  }
+
   showModal('modal-export');
+}
+
+// Modal schließen: Blob-URL aufräumen
+const _origHideModal = hideModal;
+function hideModal(id) {
+  _origHideModal(id);
+  if(id === 'modal-export' && _exportBlobUrl){
+    setTimeout(()=>{ URL.revokeObjectURL(_exportBlobUrl); _exportBlobUrl=null; }, 5000);
+  }
 }
 
 
@@ -862,28 +914,46 @@ async function teileXLSX() {
   };
   const clearMsg = () => { if(msgEl) msgEl.style.display='none'; };
 
-  setBtn('⏳ Wird erstellt…', true);
+  setBtn('⏳ Wird vorbereitet…', true);
   clearMsg();
 
-  // ── XLSX erstellen ──────────────────────────────────────────────────────────
-  let blob;
-  try {
-    blob = buildXLSXBlob();
-  } catch (err) {
-    setBtn('📲 Datei teilen', false);
-    showMsg('⚠ Fehler beim Erstellen der Datei: ' + (err.message || err), 'var(--red)');
-    return;
+  // ── Vorgebaute Blob-URL nutzen (aus openExportModal) ─────────────────────
+  // Falls noch nicht vorhanden, jetzt bauen
+  const name    = btn?.dataset?.name    || dateiname();
+  const blobUrl = btn?.dataset?.blobUrl || _exportBlobUrl;
+
+  let blob, file;
+  if (!blobUrl) {
+    // Fallback: neu bauen
+    try {
+      blob = buildXLSXBlob();
+    } catch (err) {
+      setBtn('📲 Datei teilen', false);
+      showMsg('⚠ Fehler beim Erstellen der Datei: ' + (err.message || err), 'var(--red)');
+      return;
+    }
+  } else {
+    // Aus bestehender URL rekonstruieren
+    try {
+      blob = buildXLSXBlob(); // Sicherheitshalber neu bauen
+    } catch(err) {
+      setBtn('📲 Datei teilen', false);
+      showMsg('⚠ ' + (err.message || err), 'var(--red)');
+      return;
+    }
   }
 
-  const name    = dateiname();
   const datum   = new Date().toLocaleDateString('de-DE');
   const anzahl  = bestellListe().length;
   const isIOS   = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
-  const file    = new File([blob], name, {type: blob.type});
-  const blobUrl = URL.createObjectURL(blob);
+  file          = new File([blob], name, {type: blob.type});
+  const shareUrl= URL.createObjectURL(blob);
 
   // Aufräumen nach 60 Sekunden
-  setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
+  setTimeout(() => URL.revokeObjectURL(shareUrl), 60000);
+  
+  // blobUrl für restlichen Code
+  const blobUrl2 = shareUrl;
 
   // ── [1] Datei-Teilen (iOS 15+ / Android Chrome 89+) ────────────────────────
   if (navigator.canShare) {
@@ -912,7 +982,7 @@ async function teileXLSX() {
       await navigator.share({
         title: 'Lagerbestellung HKL ' + datum,
         text:  anzahl + ' Positionen · ' + datum,
-        url:   blobUrl,
+        url:   blobUrl2,
       });
       setBtn('📲 Datei teilen', false);
       showOk();
@@ -924,7 +994,7 @@ async function teileXLSX() {
 
   // ── [3] iOS Fallback: Quick Look ────────────────────────────────────────────
   if (isIOS) {
-    window.open(blobUrl, '_blank');
+    window.open(blobUrl2, '_blank');
     setBtn('📲 Datei teilen', false);
     showMsg(
       '📂 <strong>Datei geöffnet</strong> — tippe oben auf <strong>↑ Teilen</strong> ' +
