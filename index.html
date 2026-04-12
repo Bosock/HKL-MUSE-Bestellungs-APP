@@ -54,7 +54,6 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#f4f6fb;color:#11182
 .tbl-row:last-child{border-bottom:none}
 .tbl-row.alt{background:#f8f9ff}
 .tbl-row.ersetzt{border-left:3px solid var(--orange);background:var(--orangel)}
-.tbl-wrap{border-radius:8px;overflow:hidden;margin-bottom:8px}
 /* Stepper */
 .stepper{display:flex;align-items:center;gap:2px;width:136px}
 .step-btn{width:44px;height:44px;flex-shrink:0;border-radius:8px;border:1px solid #c5cae9;background:#fff;color:#374151;cursor:pointer;font-size:22px;font-weight:300;display:flex;align-items:center;justify-content:center;padding:0;line-height:1}
@@ -119,7 +118,7 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#f4f6fb;color:#11182
     <div class="lock-err" id="lock-err"></div>
     <input class="lock-input" type="password" id="lock-pw" placeholder="••••••" onkeydown="if(event.key==='Enter')tryUnlock()">
     <button class="lock-btn" onclick="tryUnlock()">Anmelden</button>
-    <div style="font-size:11px;color:#9ca3af;margin-top:16px">Standard-Passwort: <strong>HKL2024</strong><br>Änderbar unter ⚙ Einstellungen</div>
+
   </div>
 </div>
 
@@ -136,7 +135,7 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#f4f6fb;color:#11182
       <span class="badge-white" id="hdr-pos" style="display:none"></span>
       <span class="badge-orange" id="hdr-ers" style="display:none"></span>
       <span class="badge" id="hdr-total"></span>
-      <button class="hdr-btn" id="hdr-new-btn" onclick="confirmNeueBestellung()" disabled>+ Neue Bestellung</button>
+      <button class="hdr-btn" id="hdr-new-btn" onclick="confirmNeueBestellung()" style="display:none">+ Neue Bestellung</button>
     </div>
   </div>
 
@@ -420,7 +419,6 @@ const LS = {
   ersatz:  'hkl_ersatz_v4',
   artikel: 'hkl_artikel_v4',
   pwinfo:  'hkl_pwinfo_v4',
-  ejs:     'hkl_emailjs_v4',
 };
 const APP_PW_DEFAULT = 'HKL2024';
 
@@ -436,7 +434,6 @@ let ST = {
   ersatz:  ls(LS.ersatz, []),
   artikel: ls(LS.artikel, null) || STAMM.map(a=>({...a})),
   pwinfo:  ls(LS.pwinfo, null),
-  ejs:     ls(LS.ejs, {serviceId:'', templateId:'', publicKey:'', emailTo:'', fromName:''}),
   pwVorschau: null,
   artImportLog: null,
   neuBereich: '',
@@ -450,7 +447,6 @@ function save() {
   sv(LS.ersatz,  ST.ersatz);
   sv(LS.artikel, ST.artikel);
   sv(LS.pwinfo,  ST.pwinfo);
-  sv(LS.ejs,     ST.ejs);
 }
 
 // ── Lock ──────────────────────────────────────────────────────────────────────
@@ -458,19 +454,29 @@ function save() {
 const SESSION_MS = 60 * 60 * 1000; // 60 minutes
 let _sessionTimer = null;
 
+let _sessionListenersAdded = false;
 function startSession() {
   sv('hkl_session', Date.now());
   resetSessionTimer();
-  // Extend session on any user interaction
-  ['click','touchstart','keydown'].forEach(ev =>
-    document.addEventListener(ev, resetSessionTimer, {passive:true})
-  );
+  // Extend session on any user interaction — register only once
+  if (!_sessionListenersAdded) {
+    ['click','touchstart','keydown'].forEach(ev =>
+      document.addEventListener(ev, resetSessionTimer, {passive:true})
+    );
+    _sessionListenersAdded = true;
+  }
 }
 
+let _lastSessionSave = 0;
 function resetSessionTimer() {
-  sv('hkl_session', Date.now());
   clearTimeout(_sessionTimer);
   _sessionTimer = setTimeout(lockApp, SESSION_MS);
+  // Nur alle 30 Sekunden in localStorage schreiben um I/O zu reduzieren
+  const now = Date.now();
+  if (now - _lastSessionSave > 30000) {
+    sv('hkl_session', now);
+    _lastSessionSave = now;
+  }
 }
 
 function checkSession() {
@@ -496,13 +502,15 @@ function lockApp() {
 
 function hashPw(pw) { return btoa(encodeURIComponent(pw+'_hkl_salt_2024')); }
 function tryUnlock() {
-  const pw = document.getElementById('lock-pw').value;
-  const stored = ls(LS.pw, hashPw(APP_PW_DEFAULT));
-  // Support legacy plaintext pw during migration
-  if (pw === stored || hashPw(pw) === stored || (stored===APP_PW_DEFAULT&&pw===APP_PW_DEFAULT)) {
-    // Migrate plaintext pw to hash if needed
-    const stored2=ls(LS.pw,null);
-    if(!stored2||stored2===pw) sv(LS.pw, hashPw(pw));
+  const pw     = document.getElementById('lock-pw').value;
+  const stored = ls(LS.pw, null);
+  const hash   = hashPw(pw);
+  // Prüfe: Hash stimmt überein, ODER kein PW gespeichert und es ist das Default-PW
+  const ok = stored
+    ? (stored === hash || stored === pw) // Hash-Vergleich + Legacy-Plaintext
+    : (pw === APP_PW_DEFAULT);           // Kein PW gespeichert → Default prüfen
+  if (ok) {
+    sv(LS.pw, hash); // Immer als Hash speichern (Migration von Klartext)
     startSession();
     document.getElementById('lockscreen').style.display='none';
     document.getElementById('app').classList.remove('hidden');
@@ -518,7 +526,12 @@ function tryUnlock() {
 document.getElementById('lock-pw').addEventListener('keydown', e=>{ if(e.key==='Enter') tryUnlock(); });
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-function ts() { const d=new Date(),p=n=>String(n).padStart(2,'0'); return `${d.getFullYear()}${p(d.getMonth()+1)}${p(d.getDate())}_${p(d.getHours())}${p(d.getMinutes())}`; }
+function ts() {
+  const d=new Date(), p=n=>String(n).padStart(2,'0');
+  const yy=String(d.getFullYear()).slice(2); // Zweistelliges Jahr
+  return `${yy}.${p(d.getMonth()+1)}.${p(d.getDate())}`;
+}
+function dateiname() { return `Bestellung_${ts()}.xlsx`; }
 function ist9(s) { return /^\d{9}$/.test(String(s||'').trim()); }
 function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
@@ -537,11 +550,12 @@ function getEff(a) {
   const em=ersatzMap(); const r=em[a.sapNr];
   return r ? {sapNr:r.neuNr,ersetzt:true,hinweis:r.neuBez||r.hinweis||''} : {sapNr:a.sapNr,ersetzt:false,hinweis:''};
 }
-function getMenge(id) { return Number(ST.mengen[id]||0); }
+function getMenge(id) { return Number(ST.mengen[String(id)]||0); }
 let _mengeTimer=null;
 function setMenge(id, val, immediate) {
   const n=Math.max(0,Number(val)||0);
-  if(n===0) delete ST.mengen[id]; else ST.mengen[id]=n;
+  const sid=String(id); // Immer String-Key für konsistente Speicherung
+  if(n===0) delete ST.mengen[sid]; else ST.mengen[sid]=n;
   save(); updateHeader();
   // Debounce full re-render to avoid destroying focused input
   if(immediate) { renderPage(); return; }
@@ -562,13 +576,16 @@ function buildXLSX() {
   l.forEach(a=>wsData.push([
     a.effSap,
     a.bezeichnung,
-    a.menge,
+    Number(a.menge), // Als Zahl, nicht Text
     a.bereich,
     a.ersetzt?'ERSETZT: '+a.hinweis:''
   ]));
   const ws=XLSX.utils.aoa_to_sheet(wsData);
-  // Column widths
+  // Spaltenbreiten
   ws['!cols']=[{wch:14},{wch:50},{wch:8},{wch:22},{wch:40}];
+
+  // Erste Zeile einfrieren — korrekte SheetJS API
+  ws['!sheetViews']=[{state:'frozen',ySplit:1,topLeftCell:'A2'}];
   const wb=XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb,'Bestellung',ws);
   return wb;
@@ -580,7 +597,16 @@ function buildCSVText() {
   const rows=l.map(a=>`${a.effSap};"${a.bezeichnung}";${a.menge};"${a.bereich}";"${a.ersetzt?'ERSETZT: '+a.hinweis:''}"`).join('\n');
   return '\uFEFF'+hdr+rows;
 }
-function bereiche() { return [...new Set(ST.artikel.map(a=>a.bereich))]; }
+let _bereicheCache=null;
+let _bereicheVer=0;  // Inkrementierender Versions-Zähler — O(1) statt O(n) Key
+let _bereicheCacheVer=-1;
+function bereiche() {
+  if(_bereicheCacheVer===_bereicheVer&&_bereicheCache) return _bereicheCache;
+  _bereicheCache=[...new Set(ST.artikel.map(a=>a.bereich))];
+  _bereicheCacheVer=_bereicheVer;
+  return _bereicheCache;
+}
+function invalidateBereicheCache(){_bereicheVer++;}
 
 // ── View ──────────────────────────────────────────────────────────────────────
 function setView(v) {
@@ -602,16 +628,18 @@ function renderPage() {
 }
 function render() { renderPage(); }
 function updateHeader() {
-  const _bl=bestellListe();
-  const pos=_bl.length;
-  const ers=_bl.filter(a=>a.ersetzt).length;
   const hp=document.getElementById('hdr-pos');
   const he=document.getElementById('hdr-ers');
   const hn=document.getElementById('hdr-new-btn');
-  document.getElementById('hdr-total').textContent=ST.artikel.length+' Artikel';
+  const ht=document.getElementById('hdr-total');
+  if(!hp||!he||!hn||!ht) return; // Header noch nicht im DOM
+  const _bl=bestellListe();
+  const pos=_bl.length;
+  const ers=_bl.filter(a=>a.ersetzt).length;
+  ht.textContent=ST.artikel.length+' Artikel';
   hp.style.display=pos>0?'':'none'; hp.textContent=pos+' Position'+(pos!==1?'en':'');
   he.style.display=ers>0?'':'none'; he.textContent='⚠ '+ers+' ersetzt';
-  hn.disabled=pos===0;
+  hn.style.display=pos>0?'':'none';
 }
 
 // ── Modal ─────────────────────────────────────────────────────────────────────
@@ -684,10 +712,10 @@ function renderBestellen() {
         </div>
         <div style="font-size:11px;color:var(--sub)">${esc(a.verpackung)||'—'}</div>
         <div class="stepper">
-          <button class="step-btn" ${m===0?'disabled':''} onclick="setMenge(${a.id},${m-1},true)">−</button>
+          <button class="step-btn" ${m===0?'disabled':''} onclick="setMenge('${a.id}',${m-1},true)">−</button>
           <input class="step-num ${m>0?'has':''}" type="number" min="0" value="${m||''}" placeholder="0"
-            onchange="setMenge(${a.id},this.value,true)" oninput="setMenge(${a.id},this.value)">
-          <button class="step-btn plus" onclick="setMenge(${a.id},${m+1},true)">+</button>
+            onchange="setMenge('${a.id}',this.value,true)" oninput="setMenge('${a.id}',this.value)">
+          <button class="step-btn plus" onclick="setMenge('${a.id}',${m+1},true)">+</button>
         </div>
       </div>`;
     }).join('');
@@ -715,10 +743,10 @@ function renderBestellen() {
         </div>
         <div style="font-size:11px;color:var(--sub)">${esc(a.verpackung)||'—'}</div>
         <div class="stepper">
-          <button class="step-btn" ${m===0?'disabled':''} onclick="setMenge(${a.id},${m-1},true)">−</button>
+          <button class="step-btn" ${m===0?'disabled':''} onclick="setMenge('${a.id}',${m-1},true)">−</button>
           <input class="step-num ${m>0?'has':''}" type="number" min="0" value="${m||''}" placeholder="0"
-            onchange="setMenge(${a.id},this.value,true)" oninput="setMenge(${a.id},this.value)">
-          <button class="step-btn plus" onclick="setMenge(${a.id},${m+1},true)">+</button>
+            onchange="setMenge('${a.id}',this.value,true)" oninput="setMenge('${a.id}',this.value)">
+          <button class="step-btn plus" onclick="setMenge('${a.id}',${m+1},true)">+</button>
         </div>
       </div>`;
     }).join('');
@@ -766,91 +794,118 @@ function renderExport() {
     </div>
     <div class="tbl-body mb16">${rows}</div>
     <button class="btn btn-blue" onclick="openExportModal()">📤 Exportieren / Teilen</button>
-    <div class="text-xs mt8">Dateiname: Bestellung_JJJJMMTT_HHMM.xlsx · Excel-Format · CGM MUSE kompatibel</div>`;
+    <div class="text-xs mt8">Dateiname: Bestellung_JJ.MM.DD.xlsx · Excel-Format · CGM MUSE kompatibel</div>`;
 }
 function openExportModal() {
-  document.getElementById('dl-ok').style.display='none';
-  document.getElementById('share-ok').style.display='none';
-  document.getElementById('share-not-supported').style.display='none';
+  // Alle Status-Elemente sauber zurücksetzen
+  ['dl-ok','share-ok','share-not-supported'].forEach(id=>{
+    const el=document.getElementById(id); if(el) el.style.display='none';
+  });
+  const cb=document.getElementById('copy-btn');
+  if(cb){ cb.textContent='📋 In Zwischenablage kopieren'; cb.style.background=''; }
   showModal('modal-export');
 }
 
 
 // ── Teilen via Web Share API (Handy-nativ) ────────────────────────────────────
 async function teileXLSX() {
-  const name = `Bestellung_${ts()}.xlsx`;
-  const wb   = buildXLSX();
-  const wbout= XLSX.write(wb, {bookType:'xlsx', type:'array'});
-  const blob = new Blob([wbout], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
-  const file = new File([blob], name, {type: blob.type});
+  const name  = dateiname();
+  const liste = bestellListe(); // Einmal cachen — wird mehrfach verwendet
+  const datum = new Date().toLocaleDateString('de-DE');
 
-  // Web Share API Level 2 — unterstützt Datei-Anhänge (iOS Safari 15+, Android Chrome)
+  // XLSX aufbauen
+  const wb    = buildXLSX();
+  const wbout = XLSX.write(wb, {bookType:'xlsx', type:'array'});
+  const blob  = new Blob([wbout], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+  const file  = new File([blob], name, {type: blob.type});
+
+  // Hilfsfunktion: sicherer Zugriff auf Modal-Elemente (könnten nach await null sein)
+  const showEl = (id, val) => { const el=document.getElementById(id); if(el) el.style.display=val; };
+  const hideElAfter = (id, ms) => setTimeout(()=>showEl(id,'none'), ms);
+
+  // Web Share API Level 2 — Datei-Anhänge (iOS Safari 15+, Android Chrome 75+)
   if (navigator.canShare && navigator.canShare({files:[file]})) {
     try {
       await navigator.share({
-        title: `Lagerbestellung HKL ${new Date().toLocaleDateString('de-DE')}`,
-        text:  `Lagerbestellung vom ${new Date().toLocaleDateString('de-DE')} · ${bestellListe().length} Positionen`,
+        title: `Lagerbestellung HKL ${datum}`,
+        text:  `Lagerbestellung vom ${datum} · ${liste.length} Positionen`,
         files: [file],
       });
-      document.getElementById('share-ok').style.display='inline';
-      setTimeout(()=>document.getElementById('share-ok').style.display='none', 4000);
+      showEl('share-ok','inline');
+      hideElAfter('share-ok', 4000);
     } catch(e) {
       if (e.name !== 'AbortError') {
-        // Teilen fehlgeschlagen → Fallback Download
-        document.getElementById('share-not-supported').style.display='block';
+        showEl('share-not-supported','block');
       }
     }
   } else if (navigator.share) {
-    // Share API vorhanden aber keine Datei-Unterstützung → Text teilen
+    // Share API vorhanden aber ohne Datei-Unterstützung → als Text teilen
     try {
-      const liste = bestellListe();
-      const text  = liste.map(a=>`${a.effSap} | ${a.bezeichnung} | ${a.menge}x`).join('\n');
+      const text = liste.map(a=>`${a.effSap} | ${a.bezeichnung} | ${a.menge}x`).join('\n');
       await navigator.share({
-        title: `Lagerbestellung HKL ${new Date().toLocaleDateString('de-DE')}`,
-        text:  `Lagerbestellung ${new Date().toLocaleDateString('de-DE')}:\n\n${text}`,
+        title: `Lagerbestellung HKL ${datum}`,
+        text:  `Lagerbestellung ${datum}:\n\n${text}`,
       });
-      document.getElementById('share-ok').style.display='inline';
-      setTimeout(()=>document.getElementById('share-ok').style.display='none', 4000);
-    } catch(e) { /* abgebrochen */ }
+      showEl('share-ok','inline');
+      hideElAfter('share-ok', 4000);
+    } catch(e) { /* Nutzer hat abgebrochen — kein Fehler */ }
   } else {
-    // Kein Share API → Hinweis anzeigen, Download anbieten
-    document.getElementById('share-not-supported').style.display='block';
+    // Kein Share API (z.B. Desktop-Browser) → Hinweis anzeigen
+    showEl('share-not-supported','block');
   }
 }
 
 // ── Download ──────────────────────────────────────────────────────────────────
 async function downloadCSV() {
-  const name=`Bestellung_${ts()}.xlsx`;
-  const wb=buildXLSX();
-  // Use SheetJS to write as xlsx blob
-  const wbout=XLSX.write(wb,{bookType:'xlsx',type:'array'});
-  const blob=new Blob([wbout],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+  const name   = dateiname();
+  const wb     = buildXLSX();
+  const wbout  = XLSX.write(wb,{bookType:'xlsx',type:'array'});
+  const blob   = new Blob([wbout],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+  // Null-safe Feedback-Helfer (Modal könnte inzwischen geschlossen sein)
+  const showDlOk = () => {
+    const el=document.getElementById('dl-ok');
+    if(el){ el.style.display='inline'; setTimeout(()=>el.style.display='none',4000); }
+  };
   if(window.showSaveFilePicker) {
     try {
-      const h=await window.showSaveFilePicker({suggestedName:name,types:[{description:'Excel-Datei',accept:{'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet':['.xlsx']}}]});
+      const h=await window.showSaveFilePicker({
+        suggestedName:name,
+        types:[{description:'Excel-Datei',accept:{'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet':['.xlsx']}}]
+      });
       const w=await h.createWritable(); await w.write(blob); await w.close();
-      document.getElementById('dl-ok').style.display='inline';
-      setTimeout(()=>document.getElementById('dl-ok').style.display='none',4000);
-      return;
+      showDlOk(); return;
     } catch(e) { if(e.name==='AbortError') return; }
   }
+  // Fallback: unsichtbarer Link
   const url=URL.createObjectURL(blob);
   const a=document.createElement('a'); a.href=url; a.download=name;
   document.body.appendChild(a); a.click(); document.body.removeChild(a);
   URL.revokeObjectURL(url);
-  document.getElementById('dl-ok').style.display='inline';
-  setTimeout(()=>document.getElementById('dl-ok').style.display='none',4000);
+  showDlOk();
 }
 function copyCSV() {
-  navigator.clipboard?.writeText(buildCSVText()).then(()=>{
+  const setBtn = (txt, bg) => {
     const b=document.getElementById('copy-btn');
-    b.textContent='✓ Kopiert!'; b.style.background='var(--green)';
-    setTimeout(()=>{ b.textContent='📋 Kopieren'; b.style.background=''; },3000);
-  });
+    if(b){ b.textContent=txt; b.style.background=bg||''; }
+  };
+  const resetBtn = () => setTimeout(()=>setBtn('📋 In Zwischenablage kopieren',''), 3000);
+  const text = buildCSVText();
+  if (navigator.clipboard?.writeText) {
+    navigator.clipboard.writeText(text)
+      .then(()=>{ setBtn('✓ Kopiert!','var(--green)'); resetBtn(); })
+      .catch(()=>{ setBtn('⚠ Nicht möglich','var(--red)'); resetBtn(); });
+  } else {
+    // Fallback für ältere Browser
+    const ta=document.createElement('textarea');
+    ta.value=text; ta.style.cssText='position:fixed;opacity:0;top:0;left:0';
+    document.body.appendChild(ta); ta.focus(); ta.select();
+    try { document.execCommand('copy'); setBtn('✓ Kopiert!','var(--green)'); }
+    catch { setBtn('⚠ Manuell kopieren','var(--orange)'); }
+    document.body.removeChild(ta);
+    resetBtn();
+  }
 }
 
-// ── EmailJS Send (deaktiviert — Teilen-Funktion wird verwendet) ──────────────
-async function sendEmail() { alert('Bitte die Teilen-Funktion verwenden.'); }
 
 
 // ── ARTIKEL ───────────────────────────────────────────────────────────────────
@@ -902,13 +957,13 @@ function renderArtikel() {
   <div class="tbl-head" style="grid-template-columns:1fr 110px 90px 44px;border-radius:8px 8px 0 0">
     <span>Bezeichnung</span><span>SAP-Nr.</span><span>Bereich</span><span></span>
   </div>
-  <div class="tbl-body" style="max-height:400px;overflow-y:auto">
+  <div style="max-height:400px;overflow-y:auto;border:1px solid var(--border);border-radius:0 0 8px 8px">
     ${ST.artikel.map((a,i)=>`
       <div class="tbl-row ${i%2===1?'alt':''}" style="grid-template-columns:1fr 110px 90px 44px">
         <div style="font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(a.bezeichnung)}</div>
         <div class="sap sap-blue">${esc(a.sapNr)||'—'}</div>
         <div style="font-size:10px;color:var(--sub);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(a.bereich)}</div>
-        <button onclick="delArtikel(${a.id})" style="width:44px;height:44px;border-radius:8px;border:1px solid var(--border);background:var(--redl);color:var(--red);cursor:pointer;font-size:16px;flex-shrink:0">✕</button>
+        <button onclick="delArtikel('${a.id}')" style="width:44px;height:44px;border-radius:8px;border:1px solid var(--border);background:var(--redl);color:var(--red);cursor:pointer;font-size:16px;flex-shrink:0">✕</button>
       </div>`).join('')}
   </div>`;
 }
@@ -916,37 +971,49 @@ function artikelHinzu() {
   const bez=(document.getElementById('neu-bez')?.value||ST.neuBez).trim();
   const sap=(document.getElementById('neu-sap')?.value||ST.neuSap).trim();
   const vpk=(document.getElementById('neu-vpk')?.value||ST.neuVpk).trim();
-  const br =document.getElementById('neu-bereich')?.value||ST.neuBereich;
+  const brRaw=document.getElementById('neu-bereich')?.value||ST.neuBereich;
+  const br=(!brRaw||brRaw==='__neu__')?'':(brRaw);
+  // show() MUSS vor dem ersten Aufruf deklariert sein
   const errEl=document.getElementById('neu-err');
-  const show=msg=>{ errEl.textContent=msg; errEl.style.display=''; };
+  const show=msg=>{ if(errEl){errEl.textContent=msg; errEl.style.display='';} };
+  if(!br) return show('Bitte einen Bereich auswählen oder eingeben.');
   if(!bez) return show('Artikelbezeichnung fehlt.');
   if(!ist9(sap)) return show('SAP-Nummer muss genau 9 Ziffern haben.');
   if(ST.artikel.find(a=>a.sapNr===sap)) return show('Diese SAP-Nummer existiert bereits.');
-  ST.artikel.push({id:(typeof crypto!=='undefined'&&crypto.randomUUID)?crypto.randomUUID():Date.now()+'_'+Math.random().toString(36).slice(2),bereich:br,bezeichnung:bez,sapNr:sap,verpackung:vpk});
+  invalidateBereicheCache(); ST.artikel.push({id:(typeof crypto!=='undefined'&&crypto.randomUUID)?crypto.randomUUID():Date.now()+'_'+Math.random().toString(36).slice(2),bereich:br,bezeichnung:bez,sapNr:sap,verpackung:vpk});
   ST.neuBez=''; ST.neuSap=''; ST.neuVpk='';
   save(); renderPage();
 }
 function delArtikel(id) {
-  ST.artikel=ST.artikel.filter(a=>a.id!==id);
+  ST.artikel=ST.artikel.filter(a=>a.id!==id); invalidateBereicheCache();
   // Auch gespeicherte Menge für diesen Artikel löschen
-  delete ST.mengen[id];
+  delete ST.mengen[String(id)];
   invalidateErsatzCache();
   save(); renderPage();
 }
 function parseArtikelDatei(e) {
   const file=e.target.files[0]; if(!file) return; e.target.value='';
   const r=new FileReader(); r.onload=ev=>{
-    const wb=XLSX.read(new Uint8Array(ev.target.result),{type:'array'});
-    const ws=wb.Sheets[wb.SheetNames[0]];
-    const rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
+    let wb, rows;
+    try {
+      wb=XLSX.read(new Uint8Array(ev.target.result),{type:'array'});
+      const ws=wb.Sheets[wb.SheetNames[0]];
+      rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
+    } catch(err) {
+      alert('Fehler beim Lesen der Datei. Bitte nur Excel- oder CSV-Dateien hochladen.');
+      return;
+    }
     const sapSet=new Set(ST.artikel.map(a=>a.sapNr));
     const log=[];
+    const seenInImport=new Set(); // Track SAPs within the import file itself
     rows.forEach((row,ri)=>{
       const sap=row.map(c=>String(c).trim()).find(c=>ist9(c)); if(!sap) return;
       const bez=row.map(c=>String(c).trim()).find(c=>c&&!ist9(c)&&c.length>2)||`Artikel ${ri+1}`;
       const rest=row.map(c=>String(c).trim()).filter(c=>c&&c!==sap&&c!==bez&&c.length>1);
-      const dup=sapSet.has(sap);
-      const uid=(typeof crypto!=='undefined'&&crypto.randomUUID)?crypto.randomUUID():(Date.now()+'_'+ri+'_'+Math.random().toString(36).slice(2)); log.push({a:{id:uid,bereich:ST.neuBereich||bereiche()[0]||'',bezeichnung:bez,sapNr:sap,verpackung:rest.slice(0,2).join(' ')},dup,sel:!dup});
+      const dup=sapSet.has(sap)||seenInImport.has(sap);
+      seenInImport.add(sap);
+      const uid=(typeof crypto!=='undefined'&&crypto.randomUUID)?crypto.randomUUID():(Date.now()+'_'+ri+'_'+Math.random().toString(36).slice(2));
+      log.push({a:{id:uid,bereich:ST.neuBereich||bereiche()[0]||'',bezeichnung:bez,sapNr:sap,verpackung:rest.slice(0,2).join(' ')},dup,sel:!dup});
     });
     ST.artImportLog=log;
     renderArtikelImportModal();
@@ -967,7 +1034,7 @@ function renderArtikelImportModal() {
 }
 function artImportBestaetigen() {
   const neu=(ST.artImportLog||[]).filter(e=>e.sel&&!e.dup).map(e=>e.a);
-  ST.artikel.push(...neu); save();
+  invalidateBereicheCache(); ST.artikel.push(...neu); save();
   hideModal('modal-artikel-import'); renderPage();
 }
 
@@ -1009,7 +1076,7 @@ function renderErsatz() {
           ${r.hinweis?`<div class="text-xs mt4">${esc(r.hinweis)}</div>`:''}
           ${r.datum?`<div class="text-xs mt4">${r.datum}${r.ma?' · '+r.ma:''}</div>`:''}
         </div>
-        ${!isExcel?`<button onclick="delErsatzByKey('${r.altNr}','${r.neuNr}')" class="btn btn-red btn-sm" style="padding:5px 9px">✕</button>`:`<div style="width:36px"></div>`}
+        ${!isExcel?`<button onclick="delErsatzByKey('${esc(r.altNr)}','${esc(r.neuNr)}')" class="btn btn-red btn-sm" style="padding:5px 9px">✕</button>`:`<div style="width:36px"></div>`}
       </div>
     </div>`;
   }
@@ -1162,7 +1229,6 @@ function pwImportBestaetigen() {
 
 // ── SETTINGS ──────────────────────────────────────────────────────────────────
 function renderSettings() {
-  const ejs=ST.ejs;
   return `
   <div class="card mb16">
     <div style="font-size:14px;font-weight:700;margin-bottom:4px">🔒 Passwort ändern</div>
@@ -1174,43 +1240,7 @@ function renderSettings() {
     <div id="pw-err" style="font-size:12px;color:var(--red);margin-bottom:8px;display:none"></div>
     <button class="btn btn-blue btn-sm" onclick="changePw()">Passwort speichern</button>
   </div>
-
-  <div class="card mb16">
-    <div style="font-size:14px;font-weight:700;margin-bottom:4px">📧 E-Mail Einstellungen (EmailJS)</div>
-    <div class="text-sub mb12">Einmalige Einrichtung für den E-Mail-Versand. <a href="https://www.emailjs.com" target="_blank" style="color:var(--blue)">emailjs.com</a> kostenlos registrieren, dann diese Daten eintragen.</div>
-    <div class="setting-row">
-      <div><div style="font-size:13px;font-weight:600">Service ID</div><div class="text-xs">Unter EmailJS → Email Services</div></div>
-      <input class="inp" id="ejs-service" value="${esc(ejs.serviceId)}" placeholder="service_xxxxxxx" oninput="ST.ejs.serviceId=this.value">
-    </div>
-    <div class="setting-row">
-      <div><div style="font-size:13px;font-weight:600">Template ID</div><div class="text-xs">Unter EmailJS → Email Templates</div></div>
-      <input class="inp" id="ejs-template" value="${esc(ejs.templateId)}" placeholder="template_xxxxxxx" oninput="ST.ejs.templateId=this.value">
-    </div>
-    <div class="setting-row">
-      <div><div style="font-size:13px;font-weight:600">Public Key</div><div class="text-xs">Unter EmailJS → Account → API Keys</div></div>
-      <input class="inp" id="ejs-pubkey" value="${esc(ejs.publicKey)}" placeholder="xxxxxxxxxxxxxxxxxxx" oninput="ST.ejs.publicKey=this.value">
-    </div>
-    <div class="setting-row">
-      <div><div style="font-size:13px;font-weight:600">Standard-Empfänger</div><div class="text-xs">Vorausgefüllt beim E-Mail-Versand</div></div>
-      <input class="inp" id="ejs-to" type="email" value="${esc(ejs.emailTo)}" placeholder="einkauf@klinik.de" oninput="ST.ejs.emailTo=this.value">
-    </div>
-    <div class="setting-row" style="border:none">
-      <div><div style="font-size:13px;font-weight:600">Standard Absender-Name</div><div class="text-xs">Erscheint in der E-Mail</div></div>
-      <input class="inp" id="ejs-name" value="${esc(ejs.fromName)}" placeholder="HKL Team" oninput="ST.ejs.fromName=this.value">
-    </div>
-    <div id="ejs-saved" style="font-size:12px;color:var(--green);margin-bottom:8px;display:none">✓ Gespeichert!</div>
-    <button class="btn btn-blue btn-sm" onclick="saveEjs()">Einstellungen speichern</button>
-  </div>
-
-  <div class="card">
-    <div style="font-size:14px;font-weight:700;margin-bottom:12px">ℹ️ EmailJS Template-Variablen</div>
-    <div class="text-sub mb8">Verwende diese Variablen in deinem EmailJS-Template:</div>
-    ${[['{{to_email}}','Empfänger-Adresse'],['{{from_name}}','Absender-Name'],['{{subject}}','Betreff (automatisch)'],['{{message}}','Persönliche Nachricht'],['{{bestellung}}','Bestellliste als Text'],['{{anzahl}}','Anzahl Positionen'],['{{datum}}','Datum der Bestellung'],['{{csv_content}}','Bestellliste als Text (für E-Mail-Body)'],['{{xlsx_base64}}','Excel-Datei als Base64 (für Anhang)'],['{{filename}}','Dateiname der Excel-Datei']].map(([v,d])=>`
-      <div style="display:flex;gap:12px;padding:5px 0;border-bottom:1px solid var(--border);font-size:12px">
-        <code style="background:#f0f2f8;padding:2px 6px;border-radius:4px;color:var(--blue);min-width:140px">${v}</code>
-        <span style="color:var(--sub)">${d}</span>
-      </div>`).join('')}
-  </div>`;
+`;
 }
 function changePw() {
   const p1=document.getElementById('new-pw1').value;
@@ -1221,11 +1251,6 @@ function changePw() {
   sv(LS.pw, hashPw(p1)); e.style.display='none';
   document.getElementById('new-pw1').value=''; document.getElementById('new-pw2').value='';
   alert('✓ Passwort gespeichert.');
-}
-function saveEjs() {
-  save();
-  const el=document.getElementById('ejs-saved');
-  el.style.display=''; setTimeout(()=>el.style.display='none',3000);
 }
 
 // ── Init ──────────────────────────────────────────────────────────────────────
